@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv"
+import dotenv from "dotenv";
+import crypto from "node:crypto";
 import { database } from "../middlewares/database";
 import AppError from "../utils/AppError";
 import { sendMail } from "../utils/email";
@@ -106,7 +107,7 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
         // get user from db
         const { data: user, error } = await database
         .from("users")
-        .select("role")
+        .select("*")
         .eq("id", decodeToken.id)
         .single();
 
@@ -151,8 +152,6 @@ export const forgotpassword = async function (req: Request, res: Response, next:
 
         const { otpToken, passwordExpiresAt, passwordResetToken } = generateOTP();
 
-        console.log(`Logins:`, passwordExpiresAt)
-
         // Update the user's reset token and expiration time
         const { error: updateError } = await database
             .from("users")
@@ -185,3 +184,94 @@ export const forgotpassword = async function (req: Request, res: Response, next:
         return next(new AppError("Internal server error", 500));
     }
 };
+
+// reset password
+export const resetPassword = async function (req: Request, res: Response, next: NextFunction) {
+    try {
+        // Get token from request parameters
+        const { token } = req.params;
+
+        // new Password
+        const { password , confirmPassword} = req.body;
+
+        if(password !== confirmPassword){
+            return next(new AppError(`Passwords do not match`, 402))
+        }
+
+        if (!token) {
+            return next(new AppError("Token is required", 400));
+        }
+
+        // Hash the token to match the stored hash
+        const resetToken = crypto.createHash("sha256").update(token.toString()).digest("hex");
+
+        // Retrieve the user with the matching reset token
+        const { data: users, error } = await database.from("users").select("id, username, passwordresettoken, passwordresetexpires").eq("passwordresettoken", resetToken);
+
+        if (error || !users || users.length === 0) {
+            return next(new AppError("Invalid token or token expired", 404));
+        }
+
+        const user = users[0];
+
+        // Check if the token has expired
+        if (user.passwordresetexpires < Date.now()) {
+            return next(new AppError("Token has expired", 402));
+        }
+
+        // hash the new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // create a new password and update passwordresettoken, passwordresetexpires
+        const { data:updateError } = await database.from("users").update({ passwordresettoken: null, passwordresetexpires: null, password:hashedPassword}).eq("id",user.id);
+
+        if(updateError){
+            return next(new AppError(`Error updating password`, 402))
+        }
+
+        res.status(200).json({
+            status: "success",
+            message: "Password updated successfully",
+        });
+
+    } catch (error) {
+        return next(new AppError("Internal server error", 500));
+    }
+};
+
+// Updating password
+export const updatingPassword = async function (req: any, res: Response, next: NextFunction) {
+    try {
+        const { password, currentPassword } = req.body;
+
+        if( !password || !currentPassword){
+            return next(new AppError(`Your initial password and currentPassword are required`, 403));
+        }
+
+        // check if the user exists in the database
+        const { data:userData, error } = await database.from("users").select("id, username, email, password").eq("email", req.user.email);
+        if(error || !userData || userData.length === 0) {
+            return next(new AppError("User does not exist", 403));
+        }
+
+        const user= userData[0];
+
+        // Check if current password is correct
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordValid) {
+            return next(new AppError("Current password is incorrect", 401));
+        }
+        // update password
+        const { data:updateError } = await database.from("users").update({ password: await bcrypt.hash(password, 10)}).eq("id", req.user.id);
+        if(updateError){
+            return next(new AppError(`Error updating password`, 403))
+        }
+
+        res.status(200).json({
+            status:"success",
+            message:"Password updated successfully"
+        })
+    }catch (e) {
+        return next(new AppError(`Internal server error`, 500))
+    }
+}
