@@ -12,6 +12,7 @@ const port = process.env.PORT || 8040;
 
 import userRoute from './routes/userRoute'
 import productRoute from "./routes/productRoute";
+import reviewRoute from "./routes/reviewRoute";
 import AppError from "./utils/AppError";
 
 // middleware initialization
@@ -26,7 +27,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/v1/users', userRoute);
-app.use('/api/v1/product', productRoute)
+app.use('/api/v1/product', productRoute);
+app.use('/api/v1/review', reviewRoute);
 
 app.get("/", (req: Request, res: Response, next:NextFunction) => {
   res.status(200).json({
