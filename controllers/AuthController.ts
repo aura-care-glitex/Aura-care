@@ -10,36 +10,41 @@ import { generateOTP } from "../utils/resetToken";
 
 dotenv.config()
 
-export const createUser = async function(req: Request, res: Response, next: NextFunction) {
+export const createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { email, password, username, phonenumber } = req.body;
+        const { email, password, username, phonenumber, role } = req.body;
 
         if (!email || !password || !username) {
             return next(new AppError("Email, password, and username are required", 400));
         }
 
-        // Hash the password before saving
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        // Set a default role if not provided
+        const userRole = role || "user";
+
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         // Insert user into the database
         const { data, error } = await database
             .from("users")
-            .insert([{ email, password: hashedPassword, username, phonenumber }])
-            .select("id, email, username, phonenumber");
+            .insert([{ email, password: hashedPassword, username, phonenumber, role: userRole }])
+            .select("id, email, username, phonenumber, role");
 
         if (error) {
             return next(new AppError(error.message, 400));
         }
 
+        if (!data || data.length === 0) {
+            return next(new AppError("User creation failed", 500));
+        }
+
         res.status(201).json({
             status: "success",
             message: "User created successfully",
-            user: data ? data : [0]
+            user: data[0],
         });
 
     } catch (error) {
-        console.error("Error creating a user:", error);
+        console.error("Error creating user:", error);
         return next(new AppError("Internal Server Error", 500));
     }
 };
@@ -95,7 +100,7 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
     try {
         const authHeaders = req.headers.authorization;
 
-        const token = authHeaders?.split(" ")[0]
+        const token = authHeaders?.split(" ")[1]
 
         if(!token){
             return next(new AppError(`No authorization headers`, 402))
@@ -103,6 +108,7 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
 
         // decode token
         const decodeToken:any = jwt.verify(token, process.env.JWT_SECRET  as string);
+        console.log(decodeToken)
 
         // get user from db
         const { data: user, error } = await database
@@ -110,6 +116,8 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
         .select("*")
         .eq("id", decodeToken.id)
         .single();
+
+        console.log(user)
 
         if (error) {
             return next(new AppError(error.message, 401));
@@ -119,16 +127,18 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
             return next(new AppError(`User not found`, 404))
         }
 
-        req.user = user
+        req.user = user;
+
+        next();
     } catch (error) {
         return next(new AppError(`Internal server error`, 500))
     }
 }
 
 // restrict permissions (Authorizations)
-export const restrictTo = function(...role:string[]){
+export const restrictTo = function(...roles:string[]){
     return function(req:any, res:Response, next:NextFunction){
-        if(!role.includes(req.user.role)){
+        if(!roles.includes(req.user.role)){
             return next(new AppError(`You are not authorized to perform this action`, 403))
         }
         next()

@@ -36,7 +36,7 @@ router
 router
     .route('/:productId')
         .get(getSingleProduct)
-        .patch(protect, restrictTo('admin'), updateProduct)
+        // .patch(protect, restrictTo('admin'), updateProduct)
         .delete(protect, restrictTo('admin'), deleteProduct)
         .patch(protect, restrictTo('admin'), upload.single('file') ,productImage)
 export default router;
