@@ -2,7 +2,7 @@ import { NextFunction, Response,Request } from "express";
 import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import {deleteImage, uploadImage} from "../utils/s3Client";
-import jwt, {JwtPayload} from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 
 export const getAllProducts = async function (req: Request, res: Response, next:NextFunction) {
     try {
@@ -122,9 +122,6 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
     try {
         const { productId } = req.params;
         const updateData = req.body; // No need for destructuring
-
-        console.log("Received Update Request for Product ID:", productId);
-        console.log("Update Data:", updateData);
 
         if (!productId) {
             return next(new AppError("Product ID is required", 400));

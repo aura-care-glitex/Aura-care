@@ -108,16 +108,13 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
 
         // decode token
         const decodeToken:any = jwt.verify(token, process.env.JWT_SECRET  as string);
-        console.log(decodeToken)
 
         // get user from db
         const { data: user, error } = await database
-        .from("users")
-        .select("*")
-        .eq("id", decodeToken.id)
-        .single();
-
-        console.log(user)
+            .from("users")
+            .select("*")
+            .eq("id", decodeToken.id)
+            .single();
 
         if (error) {
             return next(new AppError(error.message, 401));
