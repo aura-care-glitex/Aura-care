@@ -7,6 +7,7 @@ import { database } from "../middlewares/database";
 import AppError from "../utils/AppError";
 import { sendMail } from "../utils/email";
 import { generateOTP } from "../utils/resetToken";
+import { emailQueue } from "../middlewares/queue";
 
 dotenv.config()
 
@@ -173,7 +174,7 @@ export const forgotpassword = async function (req: Request, res: Response, next:
         }
 
         // Send the email with the OTP
-        await sendMail({
+        await emailQueue.add("sendEmail",{
             email: user.email,
             subject: "Reset your password",
             from: process.env.EMAIL_ADDRESS as string,
