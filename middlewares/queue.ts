@@ -13,3 +13,4 @@ const redisConnection = {
 
 // Export the email queue
 export const emailQueue = new Queue('email', { connection: redisConnection });
+export const paymentQueue = new Queue('payments', { connection: redisConnection })

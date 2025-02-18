@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import dotenv from 'dotenv';
-import { sendMail } from './email';
+import { sendMail } from '../email';
 
 dotenv.config();
 
@@ -26,8 +26,8 @@ export const emailWorker = new Worker('email', async (job) => {
   } catch (error) {
     console.error(`Failed to send email to ${email}:`, error);
   }
-}, {
-  connection: redisConnection,
+}, { 
+  connection: redisConnection, 
+  removeOnComplete : { count: 1000 },
+  removeOnFail: { count: 5000}
 });
-
-console.log("Email worker is running...");

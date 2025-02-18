@@ -16,7 +16,8 @@ import reviewRoute from "./routes/reviewRoute";
 import paymentRoute from "./routes/paymentRoute"
 import AppError from "./utils/AppError";
 import redis from "./middlewares/redisConfig";
-import { emailWorker } from "./utils/worker";
+import { emailWorker } from "./utils/woker-nodes/emailWorker";
+import { paymentWorker } from "./utils/woker-nodes/paymentWorker";
 
 // middleware initialization
 app.use(helmet());
@@ -60,6 +61,7 @@ async function startServer() {
     await databaseConnect(); // Establish database connection
     redis // log in redis
     emailWorker // woker node
+    paymentWorker
 
     app.listen(port, () => {
         console.log(`[server]: Server is running at http://localhost:${port}`);

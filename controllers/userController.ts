@@ -1,6 +1,7 @@
 import { NextFunction, Response,Request } from "express";
 import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
+import redis from "../middlewares/redisConfig";
 
 const filteredObj = function (obj: { [key: string]: any }, ...allowedFields: string[]) {
     let newObj: { [key: string]: any } = {};
@@ -14,6 +15,16 @@ const filteredObj = function (obj: { [key: string]: any }, ...allowedFields: str
 
 export const getAllUsers = async function(req: Request, res: Response, next: NextFunction){
     try {
+        const key = 'users:all'
+
+        const cachedUsers = await redis.get(key);
+
+        if(cachedUsers){
+            res.status(200).json({
+                status:"success",
+                data:JSON.parse(cachedUsers)
+            })
+        }
         const { data:users, error } = await database.from("users").select("*").range(0, 10);
         if(users?.length === 0){
             return next(new AppError("No users found", 400));
@@ -21,6 +32,8 @@ export const getAllUsers = async function(req: Request, res: Response, next: Nex
         if(error){
             return next(new AppError(`Error getting users`, 400))
         }
+
+        await redis.setex(key, 60, JSON.stringify(users))
 
         res.status(200).json({
             status:"success",
@@ -33,6 +46,17 @@ export const getAllUsers = async function(req: Request, res: Response, next: Nex
 
 export const getSingleUser = async function(req:any, res:Response, next:NextFunction){
     try {
+        const key = 'single:user';
+
+        const cachedUser = await redis.get(key);
+
+        if(cachedUser){
+            res.status(200).json({
+                status:"success",
+                data: JSON.parse(cachedUser)
+            })
+        }
+
         let { data:userData, error } = await database.from("users").select("*").eq("id", req.user.id);
 
         if(!userData){
@@ -42,6 +66,8 @@ export const getSingleUser = async function(req:any, res:Response, next:NextFunc
         if(error){
             return next(new AppError(`Error getting user`, 400));
         }
+
+        await redis.setex(key, 60, JSON.stringify(userData))
 
         res.status(200).json({
             status:"success",

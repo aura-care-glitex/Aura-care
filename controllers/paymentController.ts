@@ -1,77 +1,69 @@
 import dotenv from "dotenv";
 import AppError from "../utils/AppError";
 import axios from "axios";
+import crypto from "node:crypto"
 import jwt from 'jsonwebtoken';
 import {NextFunction, Request, Response} from "express";
 import {database} from "../middlewares/database";
+import redis from "../middlewares/redisConfig";
+import { paymentQueue } from "../middlewares/queue";
 
 dotenv.config();
 
-// Initialize payments(both card and mobile_money)
-export const initializePayment = async function(req:any, res:Response, next:NextFunction){
+export const initializePayment = async function(req: Request, res: Response, next: NextFunction) {
     try {
         const { email, amount } = req.body;
 
-        // get the email and id from authorization headers
+        // Get user authentication details
         const authHeaders = req.headers.authorization;
-
         if (!authHeaders) {
             return next(new AppError(`Authorization header is required`, 400));
         }
 
         const token = authHeaders.split(" ")[1];
-
         if (!token) {
             return next(new AppError(`Token is missing`, 401));
         }
 
-        // Decode token
+        // Decode JWT token
         const decodedToken: any = jwt.verify(token, process.env.JWT_SECRET as string);
-
         if (!decodedToken || !decodedToken.id) {
             return next(new AppError(`Invalid token`, 401));
         }
 
         // Fetch the user from the database
         const { data: user, error: userError } = await database.from('users').select('email').eq('id', decodedToken.id).single();
-
         if (!user) {
             return next(new AppError(`User not found`, 404));
         }
-
-        if(userError){
-            return next(new AppError(`Error getting user`, 404))
+        if (userError) {
+            return next(new AppError(`Error getting user`, 404));
         }
 
-        //convert the amount to cents => paystack uses cents
-        const paystackAmount = amount * 100;
+        // Generate an idempotency key
+        const idempotencyKey = crypto.createHash('sha256').update(`${decodedToken.id}-${amount}`).digest('hex');
+        const existingPayment = await redis.get(idempotencyKey);
 
-        const payload = {
-            email: user.email,
-            amount: paystackAmount,
-            currency: "KES",
-            channels: ["card","mobile_money"],
-            metadata: {
-                email: email
-            }
+        if (existingPayment) {
+            return next(new AppError(`Duplicate payment detected! Transaction already processed.`, 400));
         }
 
-        const response = await axios.post(process.env.PAYSTACK_INITIALIZE_URL as string, payload, {
-            headers:{
-                Authorization: `Bearer ${process.env.PAYSTACK_TEST_SECRET as string}`,
-                "Content-Type": "application/json"
-            }
-        })
-        
+        // Mark the payment as processing (valid for 5 minutes)
+        await redis.set(idempotencyKey, 'Processing', 'EX', 300);
+
+        // Add payment job to queue
+        await paymentQueue.add('process-payment', { user, amount, idempotencyKey });
+
         res.status(200).json({
-            status:"success",
-            data: response.data
-        })
-    }catch(err:any){
+            status: 'success',
+            message: 'Payment is being processed',
+        });
+
+    } catch (err: any) {
         console.log(err.message);
-        return next(new AppError(`${err.response.data}`, 500));
+        return next(new AppError(`${err.response?.data || 'Payment processing error'}`, 500));
     }
-}
+};
 
 // verify transactions
 export const verifyTransactions = async function (req:Request, res:Response, next:NextFunction) {

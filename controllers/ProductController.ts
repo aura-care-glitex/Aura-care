@@ -3,9 +3,21 @@ import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import {deleteImage, uploadImage} from "../utils/s3Client";
 import jwt from "jsonwebtoken";
+import redis from "../middlewares/redisConfig";
 
 export const getAllProducts = async function (req: Request, res: Response, next:NextFunction) {
     try {
+        const key = 'products:all'
+
+        const cachedProducts = await redis.get(key);
+
+        if ( cachedProducts) {
+            res.status(200).json({
+                status:'success',
+                products: JSON.parse(cachedProducts)
+            })
+        }
+
         let { data:products, error } = await database.from("products").select('*');
         if(products?.length === 0) {
             return next(new AppError(`No products found`, 400));
@@ -13,6 +25,8 @@ export const getAllProducts = async function (req: Request, res: Response, next:
         if(error){
             return next(new AppError(`Error getting product`, 400));
         }
+
+        await redis.setex(key, 60, JSON.stringify(products) )
 
         res.status(200).json({
             status:"success",
@@ -99,6 +113,17 @@ export const getSingleProduct = async function (req:Request, res:Response, next:
     try {
         const { productId } = req.params;
 
+        const key = "single-product";
+
+        const cachedProduct = await redis.get(key);
+
+        if(cachedProduct){
+            res.status(200).json({
+                status:"success",
+                product: JSON.parse(cachedProduct)
+            })
+        }
+
         if(!productId){
             return next(new AppError(`Product id is needed`, 401))
         }
@@ -108,6 +133,8 @@ export const getSingleProduct = async function (req:Request, res:Response, next:
         if(error){
             return next(new AppError(`Error getting a single product`, 401))
         }
+
+        await redis.setex(key, 60, JSON.stringify(data))
 
         res.status(200).json({
             status:"success",

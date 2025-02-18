@@ -2,9 +2,20 @@ import {NextFunction, Request, Response} from "express";
 import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import jwt from "jsonwebtoken";
+import redis from "../middlewares/redisConfig";
 
 export const getAllReviews = async function (req: Request, res: Response, next:NextFunction) {
     try {
+        const key = 'Reviews:all';
+
+        const cachedReviews = await redis.get(key);
+
+        if(cachedReviews){
+            res.status(200).json({
+                status:"success",
+                reviews:JSON.parse(cachedReviews)
+            })
+        }
         let { data:reviews, error } = await database.from("reviews").select("*");
         if(!(reviews) || reviews.length === 0) {
             return next(new AppError(`No reviews found`, 400));
@@ -13,6 +24,8 @@ export const getAllReviews = async function (req: Request, res: Response, next:N
         if(error){
             return next(new AppError(`Error getting reviews`, 400));
         }
+
+        await redis.setex(key, 60, JSON.stringify(reviews))
 
         res.status(200).json({
             status:"success",
@@ -26,20 +39,33 @@ export const getAllReviews = async function (req: Request, res: Response, next:N
 export const getSingleReview = async function (req:Request, res:Response, next:NextFunction){
     try {
         const { reviewId } = req.params;
+
+        const key = 'singleReview'+req.params.reviewId;
+
+        const cachedReview = await redis.get(key);
+
+        if(cachedReview){
+            res.status(200).json({
+                status:"success",
+                review: JSON.parse(cachedReview)
+            })
+        }
         
         if(!reviewId){
             return next(new AppError(`review id is needed`, 400))
         }
 
-        let { data, error } = await database.from("reviews").select("*").eq('id', reviewId);
+        let { data:review, error } = await database.from("reviews").select("*").eq('id', reviewId);
 
         if(error){
             return next(new AppError(`Error getting a single review`, 402))
         }
 
+        await redis.setex(key, 60, JSON.stringify(review))
+
         res.status(200).json({
             status:"success",
-            review:data
+            review:review
         })
     }catch(err){
         return next(new AppError(`Internal server error`, 500))

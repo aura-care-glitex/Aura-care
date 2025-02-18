@@ -5,7 +5,6 @@ import dotenv from "dotenv";
 import crypto from "node:crypto";
 import { database } from "../middlewares/database";
 import AppError from "../utils/AppError";
-import { sendMail } from "../utils/email";
 import { generateOTP } from "../utils/resetToken";
 import { emailQueue } from "../middlewares/queue";
 
