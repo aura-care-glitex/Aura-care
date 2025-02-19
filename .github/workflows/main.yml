@@ -17,7 +17,10 @@ jobs:
                   cache: 'pnpm'
 
             - name: Install pnpm
-              run: npm install -g pnpm
+              run: corepack enable && corepack prepare pnpm@latest --activate
+
+            - name: Verify pnpm installation
+              run: pnpm --version
 
             - name: Install dependencies
               run: pnpm install
@@ -44,7 +47,7 @@ jobs:
                   git merge --no-ff ${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} to main"
                   git push origin main
 
-    Merge-to-master:
+    Deploy:
         needs: Merge-to-main
         runs-on: ubuntu-latest
         steps:
