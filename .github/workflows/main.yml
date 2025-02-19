@@ -23,8 +23,13 @@ jobs:
               run: |
                   corepack enable
                   corepack prepare pnpm@latest --activate
-                  echo "PNPM path: $(which pnpm)"
-                  pnpm --version
+                  pnpm --version || echo "pnpm is not installed!"
+
+            - name: Add pnpm to PATH
+              run: echo "$HOME/.local/share/pnpm" >> $GITHUB_PATH
+
+            - name: Verify pnpm installation
+              run: which pnpm && pnpm --version
 
             - name: Install dependencies
               run: pnpm install
