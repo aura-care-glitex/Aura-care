@@ -38,18 +38,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge branch to main
+      - name: Fetch latest code
         run: |
           git fetch origin
           git checkout main
-          git merge --no-ff --allow-unrelated-histories ${{ github.event.ref }} -m "Auto-merge from ${{ github.event.ref }} to main"
-          git push origin main
+          git pull origin main
+
+      - name: Merge auth into main
+        run: |
+          git merge --no-ff origin/auth -m "Auto-merge from auth to main"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git main
 
   Deploy:
     needs: Merge-to-main
@@ -57,15 +63,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Merge main to master (Production)
+      - name: Fetch latest code
         run: |
           git fetch origin
           git checkout master
-          git merge --no-ff --allow-unrelated-histories main -m "Auto-merge from main to master for production"
-          git push origin master
+          git pull origin master
+
+      - name: Merge main into master (Production)
+        run: |
+          git merge --no-ff origin/main -m "Auto-merge from main to master for production"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git master
