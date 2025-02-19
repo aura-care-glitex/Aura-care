@@ -19,14 +19,11 @@ jobs:
                   node-version: '22'
                   cache: 'pnpm'
 
-            - name: Install pnpm
-              run: |
-                  corepack enable
-                  corepack prepare pnpm@latest --activate
-                  pnpm --version || echo "pnpm is not installed!"
+            - name: Manually Install pnpm
+              run: npm install -g pnpm
 
             - name: Add pnpm to PATH
-              run: echo "$HOME/.local/share/pnpm" >> $GITHUB_PATH
+              run: echo "$(npm root -g)/pnpm" >> $GITHUB_PATH
 
             - name: Verify pnpm installation
               run: which pnpm && pnpm --version
