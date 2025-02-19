@@ -11,12 +11,18 @@ const app: Express = express();
 const port = process.env.PORT || 8040;
 
 import userRoute from './routes/userRoute'
+import productRoute from "./routes/productRoute";
+import reviewRoute from "./routes/reviewRoute";
+import paymentRoute from "./routes/paymentRoute"
 import AppError from "./utils/AppError";
+import redis from "./middlewares/redisConfig";
+import { emailWorker } from "./utils/woker-nodes/emailWorker";
+import { paymentWorker } from "./utils/woker-nodes/paymentWorker";
 
 // middleware initialization
 app.use(helmet());
 
-app.use(cors()) // receives network traffic from any url
+app.use(cors())
 
 app.use(morgan('dev'));
 
@@ -25,6 +31,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/v1/users', userRoute);
+app.use('/api/v1/product', productRoute);
+app.use('/api/v1/review', reviewRoute);
+app.use('/api/v1/payment', paymentRoute)
 
 app.get("/", (req: Request, res: Response, next:NextFunction) => {
   res.status(200).json({
@@ -50,6 +59,9 @@ app.use((err:AppError ,req:Request, res:Response, next:NextFunction)=>{
 })
 async function startServer() {
     await databaseConnect(); // Establish database connection
+    redis // log in redis
+    emailWorker // woker node
+    paymentWorker
 
     app.listen(port, () => {
         console.log(`[server]: Server is running at http://localhost:${port}`);

@@ -1,0 +1,67 @@
+name: Aura-care-backend-action
+
+on: 
+    push:
+        branches:
+            - "**"
+    workflow_dispatch:
+
+jobs:
+    Get-code:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+      
+            - uses: pnpm/action-setup@v4
+              name: Install pnpm
+              with:
+                version: 10
+                run_install: false
+      
+            - name: Install Node.js
+              uses: actions/setup-node@v4
+              with:
+                node-version: 20
+                cache: 'pnpm'
+      
+            - name: Install dependencies
+              run: pnpm install
+
+    Merge-to-main:
+        needs: Get-code
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Configure Git
+              run: |
+                  git config --global user.name "github-actions[bot]"
+                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Merge branch to main
+              run: |
+                  git fetch origin
+                  git checkout main
+                  git merge --no-ff ${{ github.ref_name }} -m "Auto-merge from ${{ github.ref_name }} to main"
+                  git push origin main
+
+    Deploy:
+        needs: Merge-to-main
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Configure Git
+              run: |
+                  git config --global user.name "github-actions[bot]"
+                  git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+            - name: Merge main to master (Production)
+              run: |
+                  git fetch origin
+                  git checkout master
+                  git merge --no-ff main -m "Auto-merge from main to master for production"
+                  git push origin master

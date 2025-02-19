@@ -12,14 +12,23 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.744.0",
+    "@bull-board/api": "^6.7.7",
+    "@bull-board/express": "^6.7.7",
     "@supabase/supabase-js": "^2.48.1",
+    "@types/axios": "^0.14.4",
+    "@types/multer": "^1.4.12",
+    "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.41.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
+    "ioredis": "^5.5.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "multer": "1.4.5-lts.1",
     "nodemailer": "^6.10.0"
   },
   "devDependencies": {

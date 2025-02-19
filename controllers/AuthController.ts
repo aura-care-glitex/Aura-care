@@ -1,44 +1,50 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv"
+import dotenv from "dotenv";
+import crypto from "node:crypto";
 import { database } from "../middlewares/database";
 import AppError from "../utils/AppError";
-import { sendMail } from "../utils/email";
 import { generateOTP } from "../utils/resetToken";
+import { emailQueue } from "../middlewares/queue";
 
 dotenv.config()
 
-export const createUser = async function(req: Request, res: Response, next: NextFunction) {
+export const createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { email, password, username, phonenumber } = req.body;
+        const { email, password, username, phonenumber, role } = req.body;
 
         if (!email || !password || !username) {
             return next(new AppError("Email, password, and username are required", 400));
         }
 
-        // Hash the password before saving
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        // Set a default role if not provided
+        const userRole = role || "user";
+
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         // Insert user into the database
         const { data, error } = await database
             .from("users")
-            .insert([{ email, password: hashedPassword, username, phonenumber }])
-            .select("id, email, username, phonenumber");
+            .insert([{ email, password: hashedPassword, username, phonenumber, role: userRole }])
+            .select("id, email, username, phonenumber, role");
 
         if (error) {
             return next(new AppError(error.message, 400));
         }
 
+        if (!data || data.length === 0) {
+            return next(new AppError("User creation failed", 500));
+        }
+
         res.status(201).json({
             status: "success",
             message: "User created successfully",
-            user: data ? data : [0]
+            user: data[0],
         });
 
     } catch (error) {
-        console.error("Error creating a user:", error);
+        console.error("Error creating user:", error);
         return next(new AppError("Internal Server Error", 500));
     }
 };
@@ -94,7 +100,7 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
     try {
         const authHeaders = req.headers.authorization;
 
-        const token = authHeaders?.split(" ")[0]
+        const token = authHeaders?.split(" ")[1]
 
         if(!token){
             return next(new AppError(`No authorization headers`, 402))
@@ -105,10 +111,10 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
 
         // get user from db
         const { data: user, error } = await database
-        .from("users")
-        .select("role")
-        .eq("id", decodeToken.id)
-        .single();
+            .from("users")
+            .select("*")
+            .eq("id", decodeToken.id)
+            .single();
 
         if (error) {
             return next(new AppError(error.message, 401));
@@ -118,16 +124,18 @@ export const protect = async function (req:any, res:Response, next:NextFunction)
             return next(new AppError(`User not found`, 404))
         }
 
-        req.user = user
+        req.user = user;
+
+        next();
     } catch (error) {
         return next(new AppError(`Internal server error`, 500))
     }
 }
 
 // restrict permissions (Authorizations)
-export const restrictTo = function(...role:string[]){
+export const restrictTo = function(...roles:string[]){
     return function(req:any, res:Response, next:NextFunction){
-        if(!role.includes(req.user.role)){
+        if(!roles.includes(req.user.role)){
             return next(new AppError(`You are not authorized to perform this action`, 403))
         }
         next()
@@ -151,8 +159,6 @@ export const forgotpassword = async function (req: Request, res: Response, next:
 
         const { otpToken, passwordExpiresAt, passwordResetToken } = generateOTP();
 
-        console.log(`Logins:`, passwordExpiresAt)
-
         // Update the user's reset token and expiration time
         const { error: updateError } = await database
             .from("users")
@@ -167,7 +173,7 @@ export const forgotpassword = async function (req: Request, res: Response, next:
         }
 
         // Send the email with the OTP
-        await sendMail({
+        await emailQueue.add("sendEmail",{
             email: user.email,
             subject: "Reset your password",
             from: process.env.EMAIL_ADDRESS as string,
@@ -185,3 +191,94 @@ export const forgotpassword = async function (req: Request, res: Response, next:
         return next(new AppError("Internal server error", 500));
     }
 };
+
+// reset password
+export const resetPassword = async function (req: Request, res: Response, next: NextFunction) {
+    try {
+        // Get token from request parameters
+        const { token } = req.params;
+
+        // new Password
+        const { password , confirmPassword} = req.body;
+
+        if(password !== confirmPassword){
+            return next(new AppError(`Passwords do not match`, 402))
+        }
+
+        if (!token) {
+            return next(new AppError("Token is required", 400));
+        }
+
+        // Hash the token to match the stored hash
+        const resetToken = crypto.createHash("sha256").update(token.toString()).digest("hex");
+
+        // Retrieve the user with the matching reset token
+        const { data: users, error } = await database.from("users").select("id, username, passwordresettoken, passwordresetexpires").eq("passwordresettoken", resetToken);
+
+        if (error || !users || users.length === 0) {
+            return next(new AppError("Invalid token or token expired", 404));
+        }
+
+        const user = users[0];
+
+        // Check if the token has expired
+        if (user.passwordresetexpires < Date.now()) {
+            return next(new AppError("Token has expired", 402));
+        }
+
+        // hash the new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // create a new password and update passwordresettoken, passwordresetexpires
+        const { data:updateError } = await database.from("users").update({ passwordresettoken: null, passwordresetexpires: null, password:hashedPassword}).eq("id",user.id);
+
+        if(updateError){
+            return next(new AppError(`Error updating password`, 402))
+        }
+
+        res.status(200).json({
+            status: "success",
+            message: "Password updated successfully",
+        });
+
+    } catch (error) {
+        return next(new AppError("Internal server error", 500));
+    }
+};
+
+// Updating password
+export const updatingPassword = async function (req: any, res: Response, next: NextFunction) {
+    try {
+        const { password, currentPassword } = req.body;
+
+        if( !password || !currentPassword){
+            return next(new AppError(`Your initial password and currentPassword are required`, 403));
+        }
+
+        // check if the user exists in the database
+        const { data:userData, error } = await database.from("users").select("id, username, email, password").eq("email", req.user.email);
+        if(error || !userData || userData.length === 0) {
+            return next(new AppError("User does not exist", 403));
+        }
+
+        const user= userData[0];
+
+        // Check if current password is correct
+        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isPasswordValid) {
+            return next(new AppError("Current password is incorrect", 401));
+        }
+        // update password
+        const { data:updateError } = await database.from("users").update({ password: await bcrypt.hash(password, 10)}).eq("id", req.user.id);
+        if(updateError){
+            return next(new AppError(`Error updating password`, 403))
+        }
+
+        res.status(200).json({
+            status:"success",
+            message:"Password updated successfully"
+        })
+    }catch (e) {
+        return next(new AppError(`Internal server error`, 500))
+    }
+}
