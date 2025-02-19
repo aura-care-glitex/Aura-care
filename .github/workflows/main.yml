@@ -32,52 +32,52 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-  Merge-to-main:
-    needs: Get-code
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+  # Merge-to-main:
+  #   needs: Get-code
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+  #     - name: Configure Git
+  #       run: |
+  #         git config --global user.name "github-actions[bot]"
+  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Fetch latest code
-        run: |
-          git fetch origin
-          git checkout main
-          git pull origin main
+  #     - name: Fetch latest code
+  #       run: |
+  #         git fetch origin
+  #         git checkout main
+  #         git pull origin main
 
-      - name: Merge auth into main
-        run: |
-          git merge --no-ff origin/auth -m "Auto-merge from auth to main"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git main
+  #     - name: Merge auth into main
+  #       run: |
+  #         git merge --no-ff origin/auth -m "Auto-merge from auth to main"
+  #         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git main
 
-  Deploy:
-    needs: Merge-to-main
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+  # Deploy:
+  #   needs: Merge-to-main
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+  #     - name: Configure Git
+  #       run: |
+  #         git config --global user.name "github-actions[bot]"
+  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Fetch latest code
-        run: |
-          git fetch origin
-          git checkout master
-          git pull origin master
+  #     - name: Fetch latest code
+  #       run: |
+  #         git fetch origin
+  #         git checkout master
+  #         git pull origin master
 
-      - name: Merge main into master (Production)
-        run: |
-          git merge --no-ff origin/main -m "Auto-merge from main to master for production"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git master
+  #     - name: Merge main into master (Production)
+  #       run: |
+  #         git merge --no-ff origin/main -m "Auto-merge from main to master for production"
+  #         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git master
