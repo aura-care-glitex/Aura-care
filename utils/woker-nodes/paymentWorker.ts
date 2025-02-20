@@ -15,9 +15,8 @@ const redisConnection = {
 
 // create a worker to process payments
 export const paymentWorker = new Worker('payments', async function(job:Job){
-    console.log(`Processing payments for user: ${job.data.user.email}`);
 
-    const  { user, amount, idempotencyKey } = job.data;
+    const  { user, amount, idempotencyKey, product } = job.data;
 
      try {
         // convert the amount to cents(paystack)
@@ -29,7 +28,10 @@ export const paymentWorker = new Worker('payments', async function(job:Job){
             currency: "KES",
             channels: ["card","mobile_money"],
             metadata: {
-                email: user.email
+                user_id: user.id,
+                user_email: user.email,
+                product_id: product.id,
+                product_name: product.product_name,
             }
         }
 

@@ -3,18 +3,21 @@ name: Aura-care-backend-action
 on:
   push:
     branches:
-      - '**'  # Runs on all branches
-  pull_request:
-    branches:
       - main
-      - master
   workflow_dispatch: # Allows manual triggering
 
 jobs:
-  Get-code:
+  get-code:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+  install-dependencies:
+    needs: get-code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Install pnpm
@@ -29,5 +32,44 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: pnpm install
+
+  lint:
+    needs: install-dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies (Cache)
+        run: pnpm install
+
+      - name: Run Linter
+        run: pnpm run lint
+
+  test:
+    needs: install-dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies (Cache)
+        run: pnpm install
+
+      - name: Run Tests
+        run: pnpm test
+
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies (Cache)
+        run: pnpm install
+
+      - name: Compile TypeScript
+        run: pnpm run build
