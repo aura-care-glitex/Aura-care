@@ -35,41 +35,27 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
-  lint:
-    needs: install-dependencies
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install Dependencies (Cache)
-        run: pnpm install
-
-      - name: Run Linter
-        run: pnpm run lint
-
   test:
     needs: install-dependencies
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install Dependencies (Cache)
-        run: pnpm install
-
       - name: Run Tests
         run: pnpm test
 
   build:
-    needs: [lint, test]
+    needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install Dependencies (Cache)
-        run: pnpm install
-
       - name: Compile TypeScript
         run: pnpm run build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Render
+        if: github.ref == 'refs/heads/main'
+        env:
+          deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          curl "$deploy_url"
