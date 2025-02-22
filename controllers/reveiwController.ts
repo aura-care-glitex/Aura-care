@@ -1,8 +1,8 @@
 import {NextFunction, Request, Response} from "express";
 import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
-import jwt from "jsonwebtoken";
 import redis from "../middlewares/redisConfig";
+import { decodedToken } from "../middlewares/authorization";
 
 export const getAllReviews = async function (req: Request, res: Response, next:NextFunction) {
     try {
@@ -72,7 +72,7 @@ export const getSingleReview = async function (req:Request, res:Response, next:N
     }
 }
 
-export const createReview = async function (req: Request, res: Response, next: NextFunction) {
+export const createReview = async function (req: any, res: Response, next: NextFunction) {
     try {
         const { review, product_id } = req.body;
 
@@ -80,34 +80,17 @@ export const createReview = async function (req: Request, res: Response, next: N
             return next(new AppError("Review and Product ID are required", 400));
         }
 
-        // Extract authorization header
-        const authHeaders = req.headers.authorization;
-        if (!authHeaders) {
-            return next(new AppError("No authorization headers provided", 401));
-        }
-
-        const token = authHeaders.split(" ")[1];
-        if (!token) {
-            return next(new AppError("Invalid authorization header format", 401));
-        }
-
-        // Decode JWT Token
-        let decodedToken: any;
-        try {
-            decodedToken = jwt.verify(token, process.env.JWT_SECRET as string);
-        } catch (error) {
-            return next(new AppError("Invalid or expired token", 403));
-        }
+        const userId = await decodedToken(req.token)
 
         // Fetch user from database
-        const { data: user, error: userError } = await database.from("users").select("*").eq("id", decodedToken.id).single();
+        const { data: user, error: userError } = await database.from("users").select("*").eq("id", userId).single();
 
         if (userError || !user) {
             return next(new AppError("User not found", 404));
         }
 
         // Insert review into the database
-        const { data: createdReview, error: insertError } = await database.from("reviews").insert([{ name: user.username, date: new Date().toISOString(), review, user_id: decodedToken.id, product_id,}]).select("*");
+        const { data: createdReview, error: insertError } = await database.from("reviews").insert([{ name: user.username, date: new Date().toISOString(), review, user_id: userId, product_id,}]).select("*");
 
         if (insertError) {
             return next(new AppError(`Error creating review`, 500));
@@ -125,7 +108,7 @@ export const createReview = async function (req: Request, res: Response, next: N
     }
 };
 
-export const updateReview = async function (req:Request, res:Response, next:NextFunction){
+export const updateReview = async function (req:any, res:Response, next:NextFunction){
     try {
         const { reviewId } = req.params;
         const updateBody = req.body
@@ -134,24 +117,7 @@ export const updateReview = async function (req:Request, res:Response, next:Next
             return next(new AppError("Review and Product ID are required", 400));
         }
 
-        // Extract authorization header
-        const authHeaders = req.headers.authorization;
-        if (!authHeaders) {
-            return next(new AppError("No authorization headers provided", 401));
-        }
-
-        const token = authHeaders.split(" ")[1];
-        if (!token) {
-            return next(new AppError("Invalid authorization header format", 401));
-        }
-
-        // Decode JWT Token
-        let decodedToken: any;
-        try {
-            decodedToken = jwt.verify(token, process.env.JWT_SECRET as string);
-        } catch (error) {
-            return next(new AppError("Invalid or expired token", 403));
-        }
+        const userId = await decodedToken(req.token)
 
         // get the review from the database
         const { data: review, error: reviewError } = await database.from("reviews").select("*").eq("id", reviewId);
@@ -166,13 +132,13 @@ export const updateReview = async function (req:Request, res:Response, next:Next
 
         // check if this user belongs to that review
         // Fetch user from database
-        const { data: user, error: userError } = await database.from("users").select("*").eq("id", decodedToken.id).single();
+        const { data: user, error: userError } = await database.from("users").select("*").eq("id", userId).single();
 
         if (userError || !user) {
             return next(new AppError("User not found", 404));
         }
 
-        if(user.id != decodedToken.id) {
+        if(user.id != userId) {
             return next(new AppError(`You are not allowed to perform this action`, 402))
         }
 
@@ -198,7 +164,7 @@ export const updateReview = async function (req:Request, res:Response, next:Next
     }
 }
 
-export const deleteReview = async function (req:Request, res:Response, next:NextFunction){
+export const deleteReview = async function (req:any, res:Response, next:NextFunction){
     try {
         const { reviewId } = req.params;
 
@@ -206,24 +172,7 @@ export const deleteReview = async function (req:Request, res:Response, next:Next
             return next(new AppError("Review id is required", 400));
         }
 
-        // Extract authorization header
-        const authHeaders = req.headers.authorization;
-        if (!authHeaders) {
-            return next(new AppError("No authorization headers provided", 401));
-        }
-
-        const token = authHeaders.split(" ")[1];
-        if (!token) {
-            return next(new AppError("Invalid authorization header format", 401));
-        }
-
-        // Decode JWT Token
-        let decodedToken: any;
-        try {
-            decodedToken = jwt.verify(token, process.env.JWT_SECRET as string);
-        } catch (error) {
-            return next(new AppError("Invalid or expired token", 403));
-        }
+        const userId = await decodedToken(req.token)
 
         // get the review from the database
         const { data: review, error: reviewError } = await database.from("reviews").select("*").eq("id", reviewId);
@@ -238,13 +187,13 @@ export const deleteReview = async function (req:Request, res:Response, next:Next
 
         // check if this user belongs to that review
         // Fetch user from database
-        const { data: user, error: userError } = await database.from("users").select("*").eq("id", decodedToken.id).single();
+        const { data: user, error: userError } = await database.from("users").select("*").eq("id", userId).single();
 
         if (userError || !user) {
             return next(new AppError("User not found", 404));
         }
 
-        if(user.id != decodedToken.id) {
+        if(user.id != userId) {
             return next(new AppError(`You are not allowed to perform this action`, 402))
         }
 

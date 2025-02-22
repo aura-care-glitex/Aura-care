@@ -2,8 +2,8 @@ import { NextFunction, Response,Request } from "express";
 import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import {deleteImage, uploadImage} from "../utils/s3Client";
-import jwt from "jsonwebtoken";
 import redis from "../middlewares/redisConfig";
+import { decodedToken } from "../middlewares/authorization";
 
 export const getAllProducts = async function (req: Request, res: Response, next:NextFunction) {
     try {
@@ -39,30 +39,11 @@ export const getAllProducts = async function (req: Request, res: Response, next:
 
 export const createProduct = async (req: any, res: Response, next: NextFunction) => {
     try {
-        // Check for authorization header
-        const authHeaders = req.headers.authorization;
 
-        if (!authHeaders) {
-            return next(new AppError(`Authorization header is required`, 400));
-        }
-
-        const token = authHeaders.split(" ")[1];
-
-        if (!token) {
-            return next(new AppError(`Token is missing`, 401));
-        }
-
-        // Decode token
-        const decodedToken: any = jwt.verify(token, process.env.JWT_SECRET as string);
-
-        if (!decodedToken || !decodedToken.id) {
-            return next(new AppError(`Invalid token`, 401));
-        }
-
-        console.log(decodedToken.id);
+        const userId = await decodedToken(req.token)
 
         // Fetch the user from the database
-        const { data: user, error: userError } = await database.from('users').select('role').eq('id', decodedToken.id).single();
+        const { data: user, error: userError } = await database.from('users').select('role').eq('id', userId).single();
 
         if (!user) {
             return next(new AppError(`User not found`, 404)); // User not found error
@@ -77,7 +58,7 @@ export const createProduct = async (req: any, res: Response, next: NextFunction)
             return next(new AppError(`You are not authorized to create a product`, 403));
         }
 
-        const { product_name, brand, size, key_ingredients, skin_type, texture, usage } = req.body;
+        const { product_name, brand, size, key_ingredients, skin_type, texture, usage,imageurl ,price,stock_quantity , category} = req.body;
 
         // Check if all necessary fields are provided
         if (!product_name || !brand || !size || !key_ingredients || !skin_type || !texture || !usage) {
@@ -91,9 +72,13 @@ export const createProduct = async (req: any, res: Response, next: NextFunction)
             size,
             key_ingredients,
             skin_type,
+            imageurl,
+            category,
+            price,
+            stock_quantity,
             texture,
             usage,
-            user_id: decodedToken.id
+            user_id: userId
         }]).select();
 
         if (error) {
@@ -225,7 +210,10 @@ export const productImage = async function (req: Request, res: Response, next: N
             return next(new AppError("Product ID is required", 400));
         }
 
-        // Check if the product exists in the database
+        if (!req.file) {
+            return next(new AppError("No file uploaded", 400));
+        }
+
         const { data: product, error } = await database.from("products").select("*").eq("id", productId);
 
         if (error) {
@@ -237,14 +225,14 @@ export const productImage = async function (req: Request, res: Response, next: N
         }
 
         // Upload new image
-        const imageUrl = await uploadImage(req.file);
+        const imageUploadResult = await uploadImage(req.file);
 
-        if (!imageUrl) {
+        if (!imageUploadResult) {
             return next(new AppError("Error uploading image", 500));
         }
 
         // Update the product imageUrl in the database
-        const { error: updateError } = await database.from("products").update({ imageUrl }).eq("id", productId);
+        const { error: updateError } = await database.from("products").update({ imageurl: imageUploadResult.imageUrl }).eq("id", productId);
 
         if (updateError) {
             return next(new AppError(`Error updating product image: ${updateError.message}`, 500));
@@ -268,10 +256,11 @@ export const productImage = async function (req: Request, res: Response, next: N
         res.status(200).json({
             status: "success",
             message: "Product image updated successfully",
-            imageUrl: imageUrl
+            imageUrl: imageUploadResult.imageUrl
         });
 
     } catch (err) {
+        console.log(err)
         return next(new AppError("Internal server error", 500));
     }
 };
