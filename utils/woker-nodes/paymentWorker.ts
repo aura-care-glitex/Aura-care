@@ -39,15 +39,13 @@ export const paymentWorker = new Worker('payments', async function(job:Job){
             headers:{
                 Authorization: `Bearer ${process.env.PAYSTACK_TEST_SECRET as string}`,
                 "Content-Type": "application/json"
-            }
+            },
+            timeout: 5000
         })
-
-        console.log(response.data)
 
         return response.data;
 
      } catch (error:any) {
-        console.error(`Payment processing failed:`, error.message)
 
         // remove idempotency key on failure to allow retry
         await redis.del(idempotencyKey)

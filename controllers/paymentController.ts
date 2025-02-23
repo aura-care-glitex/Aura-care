@@ -5,7 +5,7 @@ import crypto from "node:crypto"
 import {NextFunction, Request, Response} from "express";
 import {database} from "../middlewares/database";
 import redis from "../middlewares/redisConfig";
-import { paymentQueue } from "../middlewares/queue";
+import { paymentQueue, paymentQueueEvents } from "../middlewares/queue";
 import { decodedToken } from "../middlewares/authorization";
 
 dotenv.config();
@@ -47,12 +47,21 @@ export const initializePayment = async function(req: any, res: Response, next: N
         await redis.set(idempotencyKey, 'Processing', 'EX', 300);
 
         // Add payment job to queue
-        await paymentQueue.add('process-payment', { user, amount, idempotencyKey, product });
+        const job = await paymentQueue.add('process-payment', { user, amount, idempotencyKey, product }, { priority: 1 });
+
+        // wait for the job to finish
+        const result = await job.waitUntilFinished(paymentQueueEvents, 3000); // Correctly wait for job completion
+
+        // Check if the result contains the authorization URL
+        if (!result.data.authorization_url) {
+            throw new Error('Authorization URL not received from Paystack');
+        }
 
         res.status(200).json({
             status: 'success',
-            message: 'Payment is being processed',
-        });
+            message: 'Payment initialized successfully',
+            url: result.data
+        });;
 
     } catch (err: any) {
         console.log(err.message);
