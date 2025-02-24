@@ -13,7 +13,8 @@ const port = process.env.PORT || 8040;
 import userRoute from './routes/userRoute'
 import productRoute from "./routes/productRoute";
 import reviewRoute from "./routes/reviewRoute";
-import paymentRoute from "./routes/paymentRoute"
+import paymentRoute from "./routes/paymentRoute";
+import shippingRoute from "./routes/shippingFeeRoute"
 import AppError from "./utils/AppError";
 import redis from "./middlewares/redisConfig";
 import { emailWorker } from "./utils/woker-nodes/emailWorker";
@@ -34,6 +35,7 @@ app.use('/api/v1/users', userRoute);
 app.use('/api/v1/product', productRoute);
 app.use('/api/v1/review', reviewRoute);
 app.use('/api/v1/payment', paymentRoute)
+app.use('/api/v1/shipping', shippingRoute)
 
 app.get("/", (req: Request, res: Response, next:NextFunction) => {
   res.status(200).json({
