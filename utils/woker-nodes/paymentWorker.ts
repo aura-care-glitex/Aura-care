@@ -15,13 +15,12 @@ const redisConnection = {
 
 // create a worker to process payments
 export const paymentWorker = new Worker('payments', async function(job:Job){
-    console.log(`Processing payments for user: ${job.data.user.email}`);
 
-    const  { user, amount, idempotencyKey } = job.data;
+    const  { user, amount, idempotencyKey, product,  } = job.data;
 
      try {
         // convert the amount to cents(paystack)
-        const paystackAmount = amount * 100;
+        const paystackAmount = (amount + user.shipping_fee) * 100;
 
         const payload = {
             email: user.email,
@@ -29,7 +28,10 @@ export const paymentWorker = new Worker('payments', async function(job:Job){
             currency: "KES",
             channels: ["card","mobile_money"],
             metadata: {
-                email: user.email
+                user_id: user.id,
+                user_email: user.email,
+                product_id: product.id,
+                product_name: product.product_name,
             }
         }
 
@@ -37,15 +39,13 @@ export const paymentWorker = new Worker('payments', async function(job:Job){
             headers:{
                 Authorization: `Bearer ${process.env.PAYSTACK_TEST_SECRET as string}`,
                 "Content-Type": "application/json"
-            }
+            },
+            timeout: 5000
         })
-
-        console.log(response.data)
 
         return response.data;
 
      } catch (error:any) {
-        console.error(`Payment processing failed:`, error.message)
 
         // remove idempotency key on failure to allow retry
         await redis.del(idempotencyKey)

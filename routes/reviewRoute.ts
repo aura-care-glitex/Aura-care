@@ -8,11 +8,12 @@ import {
     updateReview
 } from "../controllers/reveiwController";
 import {protect} from "../controllers/AuthController";
+import { authHeaders } from "../middlewares/authorization";
 
 const router = express.Router();
 
-router.route('/').get(getAllReviews).post(protect,createReview);
+router.route('/').get(getAllReviews).post(protect, authHeaders,createReview);
 
-router.route('/:reviewId').get(getSingleReview).patch(protect,updateReview).delete(protect, deleteReview);
+router.route('/:reviewId').get(getSingleReview).patch(protect, authHeaders, updateReview).delete(protect,authHeaders,deleteReview);
 
 export default router;

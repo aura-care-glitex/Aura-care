@@ -3,18 +3,21 @@ name: Aura-care-backend-action
 on:
   push:
     branches:
-      - '**'  # Runs on all branches
-  pull_request:
-    branches:
       - main
-      - master
   workflow_dispatch: # Allows manual triggering
 
 jobs:
-  Get-code:
+  get-code:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+  install-dependencies:
+    needs: get-code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Install pnpm
@@ -29,55 +32,48 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: pnpm install
 
-  # Merge-to-main:
-  #   needs: Get-code
+  # test:
+  #   needs: install-dependencies
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+  #     - name: Install pnpm
+  #       uses: pnpm/action-setup@v4
   #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
+  #         version: 10
+  #         run_install: false
 
-  #     - name: Configure Git
-  #       run: |
-  #         git config --global user.name "github-actions[bot]"
-  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
+  #     - name: Run Tests
+  #       run: pnpm test
 
-  #     - name: Fetch latest code
-  #       run: |
-  #         git fetch origin
-  #         git checkout main
-  #         git pull origin main
-
-  #     - name: Merge auth into main
-  #       run: |
-  #         git merge --no-ff origin/auth -m "Auto-merge from auth to main"
-  #         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git main
-
-  # Deploy:
-  #   needs: Merge-to-main
+  # build:
+  #   needs: install-dependencies
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+  #     - name: Install pnpm
+  #       uses: pnpm/action-setup@v4
   #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
+  #         version: 10
+  #         run_install: false
 
-  #     - name: Configure Git
-  #       run: |
-  #         git config --global user.name "github-actions[bot]"
-  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
+  #     - name: Compile TypeScript
+  #       run: pnpm run build
 
-  #     - name: Fetch latest code
-  #       run: |
-  #         git fetch origin
-  #         git checkout master
-  #         git pull origin master
+  deploy:
+    needs: install-dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
 
-  #     - name: Merge main into master (Production)
-  #       run: |
-  #         git merge --no-ff origin/main -m "Auto-merge from main to master for production"
-  #         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/GETANGE/Aura-care.git master
+      - name: Deploy to Render
+        if: github.ref == 'refs/heads/main'
+        env:
+          deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          curl "$deploy_url"

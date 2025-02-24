@@ -12,22 +12,36 @@ dotenv.config()
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { email, password, username, phonenumber, role } = req.body;
+        const { email, password, username, phonenumber, role, delivery_location, address } = req.body;
 
         if (!email || !password || !username) {
             return next(new AppError("Email, password, and username are required", 400));
         }
 
-        // Set a default role if not provided
+        // Set default role if not provided
         const userRole = role || "user";
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        let userData: Record<string, any> = {
+            email,
+            password: await bcrypt.hash(password, 10),
+            username,
+            phonenumber,
+            role: userRole,
+        };
 
-        // Insert user into the database
+        // Only include delivery details if the user is NOT an admin
+        if (userRole !== "admin") {
+            if (!delivery_location || !address) {
+                return next(new AppError("Address and delivery location are required for non-admin users", 400));
+            }
+            userData.delivery_location = delivery_location;
+            userData.address = address;
+        }
+
         const { data, error } = await database
             .from("users")
-            .insert([{ email, password: hashedPassword, username, phonenumber, role: userRole }])
-            .select("id, email, username, phonenumber, role");
+            .insert([userData])
+            .select("id, email, username, phonenumber, role, delivery_location, address, shipping_fee");
 
         if (error) {
             return next(new AppError(error.message, 400));
@@ -61,7 +75,7 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
         // Check if the user exists
         const { data: user, error } = await database
             .from("users")
-            .select("id, email, username, password")
+            .select("id, email, username, password, active")
             .eq("email", email)
             .single();
 
@@ -71,6 +85,10 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
 
         if(!user){
             return next(new AppError(`User not found`, 404))
+        }
+
+        if(user.active === false){
+            return next (new AppError(`Please activate your account`, 401))
         }
 
         // Compare passwords

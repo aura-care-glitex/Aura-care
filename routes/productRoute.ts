@@ -1,42 +1,54 @@
-import express from 'express'
+import express from 'express';
+import multer from 'multer';
 
 import {
     createProduct,
     deleteProduct,
     getAllProducts,
-    getSingleProduct, productImage,
+    getSingleProduct,
+    productImage,
     updateProduct
 } from "../controllers/ProductController";
-import {protect, restrictTo} from "../controllers/AuthController";
-import multer from "multer"
+
+import { protect, restrictTo } from "../controllers/AuthController";
+import { authHeaders } from '../middlewares/authorization';
 import AppError from "../utils/AppError";
 
-const router = express.Router()
+const router = express.Router();
 
-const storage = multer.memoryStorage()
+// 🔹 Multer Configuration for Image Upload
+const storage = multer.memoryStorage();
 
 const upload = multer({
     storage,
-    limits: { fileSize: 300 * 1024 }, // setting limit to 300KB,
+    limits: { fileSize: 300 * 1024 }, // 300KB limit
     fileFilter: (req, file, callback) => {
-        if(!file.originalname.match(/\.(jpg|JPG|jpeg|JPEG|png|PNG)$/)) {
-            return callback(new AppError('Only image files are allowed!', 401));
-        }else{
-            callback(null, true);  // accept the file
+        if (!file.mimetype.startsWith("image/")) {
+            return callback(new AppError('Only image files (JPG, PNG, JPEG) are allowed!', 400));
         }
-
+        callback(null, true);
     }
-})
+});
 
+// 🔹 Product Routes
 router
     .route('/')
-        .get(getAllProducts)
-        .post(protect, restrictTo('admin') ,createProduct)
+    .get(getAllProducts) // (Anyone can view products)
+    .post(protect, authHeaders, restrictTo('admin'), createProduct); // Admin Only
 
 router
     .route('/:productId')
-        .get(getSingleProduct)
-        // .patch(protect, restrictTo('admin'), updateProduct)
-        .delete(protect, restrictTo('admin'), deleteProduct)
-        .patch(protect, restrictTo('admin'), upload.single('file') ,productImage)
+    .get(getSingleProduct) // Public Route
+    .patch(protect, restrictTo('admin'), updateProduct) // Admin Only
+    .delete(protect, restrictTo('admin'), deleteProduct); // Admin Only
+
+// 🔹 Upload Product Image
+router.patch(
+    "/image/:productId",
+    protect, 
+    restrictTo('admin'), 
+    upload.single('file'), 
+    productImage
+);
+
 export default router;

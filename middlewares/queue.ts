@@ -1,9 +1,9 @@
-import { Queue } from 'bullmq';
+import { Queue, QueueEvents } from 'bullmq';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const redisConnection = {
+export const redisConnection = {
     port: 6379, 
     host: process.env.REDIS_LOCALHOST, 
     username: "default", 
@@ -14,3 +14,4 @@ const redisConnection = {
 // Export the email queue
 export const emailQueue = new Queue('email', { connection: redisConnection });
 export const paymentQueue = new Queue('payments', { connection: redisConnection })
+export const paymentQueueEvents = new QueueEvents('payments', { connection: redisConnection });

@@ -1,27 +1,39 @@
 import express from 'express';
-
 import {
     createUser,
     forgotpassword,
     loginUser,
     protect,
-    resetPassword, restrictTo,
+    resetPassword,
+    restrictTo,
     updatingPassword
 } from '../controllers/AuthController';
-import {ActivateUser, getAllUsers, getSingleUser, softDelete, updateProfile} from "../controllers/userController";
+import { 
+    ActivateUser, 
+    getAllUsers, 
+    getSingleUser, 
+    softDelete, 
+    updateProfile 
+} from "../controllers/userController";
 
 const router = express.Router();
 
-router.get('/', protect, restrictTo('admin'), getAllUsers);
+// 🔹 Authentication Routes
 router.post('/register', createUser);
-router.post('/login',loginUser );
+router.post('/login', loginUser);
 router.patch('/forgotPassword', forgotpassword);
-router.patch('/updatePassword', protect, updatingPassword);
-
-router.get('/:id', protect, getSingleUser);
-router.patch('/:userId', protect, restrictTo("admin"), ActivateUser);
 router.patch('/resetPassword/:token', resetPassword);
-router.patch('/softDelete', protect, softDelete);
+
+// 🔹 User Profile Management (Protected)
+router.patch('/updatePassword', protect, updatingPassword);
 router.patch('/updateProfile', protect, updateProfile);
+router.patch('/softDelete', protect, softDelete);
+
+// 🔹 Admin-Only Routes
+router.get('/', protect, restrictTo('admin'), getAllUsers);
+router.patch('/:userId', protect, restrictTo("admin"), ActivateUser);
+
+// 🔹 Get User Details (Protected)
+router.get('/:id', protect, getSingleUser);
 
 export default router;

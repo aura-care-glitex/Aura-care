@@ -2,37 +2,31 @@ import dotenv from "dotenv";
 import AppError from "../utils/AppError";
 import axios from "axios";
 import crypto from "node:crypto"
-import jwt from 'jsonwebtoken';
 import {NextFunction, Request, Response} from "express";
 import {database} from "../middlewares/database";
 import redis from "../middlewares/redisConfig";
-import { paymentQueue } from "../middlewares/queue";
+import { paymentQueue, paymentQueueEvents } from "../middlewares/queue";
+import { decodedToken } from "../middlewares/authorization";
 
 dotenv.config();
 
-export const initializePayment = async function(req: Request, res: Response, next: NextFunction) {
+export const initializePayment = async function(req: any, res: Response, next: NextFunction) {
     try {
-        const { email, amount } = req.body;
+        const { email, amount, productName } = req.body;
 
-        // Get user authentication details
-        const authHeaders = req.headers.authorization;
-        if (!authHeaders) {
-            return next(new AppError(`Authorization header is required`, 400));
+        const { data: product, error: productError } = await database
+            .from("products")
+            .select("id, product_name")
+            .eq("product_name", productName)
+            .single();
+
+        if (productError || !product) {
+            return next(new AppError(`This product does not exist`, 404));
         }
 
-        const token = authHeaders.split(" ")[1];
-        if (!token) {
-            return next(new AppError(`Token is missing`, 401));
-        }
+        const userId = await decodedToken(req.token)
 
-        // Decode JWT token
-        const decodedToken: any = jwt.verify(token, process.env.JWT_SECRET as string);
-        if (!decodedToken || !decodedToken.id) {
-            return next(new AppError(`Invalid token`, 401));
-        }
-
-        // Fetch the user from the database
-        const { data: user, error: userError } = await database.from('users').select('email').eq('id', decodedToken.id).single();
+        const { data: user, error: userError } = await database.from('users').select('email, shipping_fee ').eq('id', userId).single();
         if (!user) {
             return next(new AppError(`User not found`, 404));
         }
@@ -41,7 +35,7 @@ export const initializePayment = async function(req: Request, res: Response, nex
         }
 
         // Generate an idempotency key
-        const idempotencyKey = crypto.createHash('sha256').update(`${decodedToken.id}-${amount}`).digest('hex');
+        const idempotencyKey = crypto.createHash('sha256').update(`${userId}-${amount}`).digest('hex');
         const existingPayment = await redis.get(idempotencyKey);
 
         if (existingPayment) {
@@ -52,12 +46,20 @@ export const initializePayment = async function(req: Request, res: Response, nex
         await redis.set(idempotencyKey, 'Processing', 'EX', 300);
 
         // Add payment job to queue
-        await paymentQueue.add('process-payment', { user, amount, idempotencyKey });
+        const job = await paymentQueue.add('process-payment', { user, amount, idempotencyKey, product }, { priority: 1 });
+
+        // wait for the job to finish
+        const result = await job.waitUntilFinished(paymentQueueEvents, 3000);
+
+        if (!result.data.authorization_url) {
+            throw new Error('Authorization URL not received from Paystack');
+        }
 
         res.status(200).json({
             status: 'success',
-            message: 'Payment is being processed',
-        });
+            message: 'Payment initialized successfully',
+            url: result.data
+        });;
 
     } catch (err: any) {
         console.log(err.message);
@@ -84,6 +86,7 @@ export const verifyTransactions = async function (req:Request, res:Response, nex
             data:response.data
         })
     } catch (error:any) {
+        console.log(error)
         return next(new AppError(`${error.response.data}`, 500));
     }
 }
@@ -128,3 +131,59 @@ export const getSingleTransaction = async function (req:Request, res:Response, n
         return next(new AppError(`${error.response.data}`, 500))
     }
 }
+
+// webhook to save successful transactions to the database
+export const saveTransaction = async function(req: Request, res: Response, next: NextFunction) {
+    try {
+        const secret = process.env.PAYSTACK_TEST_SECRET as string;
+        const hash = crypto.createHmac("sha512", secret)
+                          .update(JSON.stringify(req.body))
+                          .digest('hex');
+
+        if (hash !== req.headers["x-paystack-signature"]) {
+            return next(new AppError("Invalid signature", 402));
+        }
+
+        const event = req.body;
+
+        if (event.event !== "charge.success") {
+            return next(new AppError("Unhandled event type", 400));
+        }
+
+        const { data: user, error: userError } = await database
+            .from("users")
+            .select("id, delivery_location")
+            .eq("email", event.data.customer.email)
+            .single();
+
+        if (userError || !user) {
+            return next(new AppError("User not found", 404));
+        }
+
+        const transactionData = {
+            email: event.data.customer.email,
+            transaction_date: event.data.paid_at,
+            reference: event.data.reference,
+            status: event.data.status,
+            user_id: user.id,
+            delivery_location:user.delivery_location,
+            product_name:event.data.metadata.product_name,
+            product_id: event.data.metadata.product_id,
+            amount: event.data.amount / 100
+        };
+
+        const { data, error } = await database.from("transactions").insert([transactionData]);
+
+        if (error) {
+            return next(new AppError("Failed to save transaction", 500));
+        }
+
+        res.status(200).json({
+            status: "success",
+            message: "Transaction saved successfully"
+        });
+
+    } catch (error: any) {
+        return next(new AppError(`Webhook processing failed: ${error.message}`, 500));
+    }
+};
