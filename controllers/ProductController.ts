@@ -5,38 +5,69 @@ import {deleteImage, uploadImage} from "../utils/s3Client";
 import redis from "../middlewares/redisConfig";
 import { decodedToken } from "../middlewares/authorization";
 
-export const getAllProducts = async function (req: Request, res: Response, next:NextFunction) {
+export const getAllProducts = async function (req: Request, res: Response, next: NextFunction) {
     try {
-        const key = 'products:all'
+        let { page = 1, limit = 10, category, minPrice, maxPrice, search } = req.query;
 
+        // Convert pagination params to numbers
+        page = Number(page);
+        limit = Number(limit);
+        const offset = (page - 1) * limit;
+
+        // Constructing filtering conditions
+        let query = database.from("products").select('*').range(offset, offset + limit - 1);
+
+        if (category) {
+            query = query.eq('category', category);
+        }
+        if (minPrice) {
+            query = query.gte('price', Number(minPrice));
+        }
+        if (maxPrice) {
+            query = query.lte('price', Number(maxPrice));
+        }
+        if (search) {
+            query = query.ilike('name', `%${search}%`);
+        }
+
+        const key = `products:page-${page}:limit-${limit}:category-${category || 'all'}:price-${minPrice || '0'}-${maxPrice || 'max'}:search-${search || 'none'}`;
+
+        // Check Redis cache
         const cachedProducts = await redis.get(key);
-
-        if ( cachedProducts) {
+        if (cachedProducts) {
             res.status(200).json({
-                status:'success',
-                products: JSON.parse(cachedProducts)
+                status: 'success',
+                products: JSON.parse(cachedProducts),
+                page,
+                limit
             });
             return
         }
 
-        let { data:products, error } = await database.from("products").select('*');
-        if(products?.length === 0) {
-            return next(new AppError(`No products found`, 400));
+        // Fetch from database
+        const { data: products, error } = await query;
+
+        if (!products || products.length === 0) {
+            return next(new AppError(`No products found`, 404));
         }
-        if(error){
-            return next(new AppError(`Error getting product`, 400));
+        if (error) {
+            return next(new AppError(`Error fetching products`, 400));
         }
 
-        await redis.setex(key, 60, JSON.stringify(products) )
+        // Store in Redis cache for 60 seconds
+        await redis.setex(key, 60, JSON.stringify(products));
 
         res.status(200).json({
-            status:"success",
-            data:products
-        })
-    }catch(err){
-        return next (new AppError("Internal server error", 500))
+            status: "success",
+            data: products,
+            page,
+            limit
+        });
+
+    } catch (err) {
+        return next(new AppError("Internal server error", 500));
     }
-}
+};
 
 export const createProduct = async (req: any, res: Response, next: NextFunction) => {
     try {

@@ -4,36 +4,61 @@ import {database} from "../middlewares/database";
 import redis from "../middlewares/redisConfig";
 import { decodedToken } from "../middlewares/authorization";
 
-export const getAllReviews = async function (req: Request, res: Response, next:NextFunction) {
+export const getAllReviews=async function(req: Request, res: Response, next: NextFunction) {
     try {
-        const key = 'Reviews:all';
+        let { page = 1, limit = 10, rating, search } = req.query;
 
-        const cachedReviews = await redis.get(key);
+        // Convert pagination params to numbers
+        page = Number(page);
+        limit = Number(limit);
+        const offset = (page - 1) * limit;
 
-        if(cachedReviews){
+        // Constructing filtering conditions
+        let query = database.from("reviews").select("*").range(offset, offset + limit - 1);
+
+        if (rating) {
+            query = query.eq("rating", Number(rating));
+        }
+        if (search) {
+            query = query.ilike("comment", `%${search}%`);
+        }
+
+        const cacheKey = `reviews:page-${page}:limit-${limit}:rating-${rating || 'all'}:search-${search || 'none'}`;
+
+        // Check Redis cache
+        const cachedReviews = await redis.get(cacheKey);
+        if (cachedReviews) {
             res.status(200).json({
-                status:"success",
-                reviews:JSON.parse(cachedReviews)
-            })
-            return;
-        }
-        let { data:reviews, error } = await database.from("reviews").select("*");
-        if(!(reviews) || reviews.length === 0) {
-            return next(new AppError(`No reviews found`, 400));
+                status: "success",
+                reviews: JSON.parse(cachedReviews),
+                page,
+                limit
+            });
+            return
         }
 
-        if(error){
-            return next(new AppError(`Error getting reviews`, 400));
+        // Fetch from database
+        const { data: reviews, error } = await query;
+
+        if (!reviews || reviews.length === 0) {
+            return next(new AppError(`No reviews found`, 404));
+        }
+        if (error) {
+            return next(new AppError(`Error fetching reviews`, 400));
         }
 
-        await redis.setex(key, 60, JSON.stringify(reviews))
+        // Store in Redis cache for 60 seconds
+        await redis.setex(cacheKey, 60, JSON.stringify(reviews));
 
         res.status(200).json({
-            status:"success",
-            reviews:reviews
-        })
-    }catch(err){
-        return next(new AppError('Internal server error', 500));
+            status: "success",
+            data: reviews,
+            page,
+            limit
+        });
+
+    } catch (err) {
+        return next(new AppError("Internal server error", 500));
     }
 }
 
