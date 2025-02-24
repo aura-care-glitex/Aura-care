@@ -15,7 +15,8 @@ export const getAllProducts = async function (req: Request, res: Response, next:
             res.status(200).json({
                 status:'success',
                 products: JSON.parse(cachedProducts)
-            })
+            });
+            return
         }
 
         let { data:products, error } = await database.from("products").select('*');
@@ -106,7 +107,8 @@ export const getSingleProduct = async function (req:Request, res:Response, next:
             res.status(200).json({
                 status:"success",
                 product: JSON.parse(cachedProduct)
-            })
+            });
+            return
         }
 
         if(!productId){

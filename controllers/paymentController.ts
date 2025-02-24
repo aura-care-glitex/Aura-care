@@ -26,8 +26,7 @@ export const initializePayment = async function(req: any, res: Response, next: N
 
         const userId = await decodedToken(req.token)
 
-        // Fetch the user from the database 
-        const { data: user, error: userError } = await database.from('users').select('email').eq('id', userId).single();
+        const { data: user, error: userError } = await database.from('users').select('email, shipping_fee ').eq('id', userId).single();
         if (!user) {
             return next(new AppError(`User not found`, 404));
         }
@@ -50,9 +49,8 @@ export const initializePayment = async function(req: any, res: Response, next: N
         const job = await paymentQueue.add('process-payment', { user, amount, idempotencyKey, product }, { priority: 1 });
 
         // wait for the job to finish
-        const result = await job.waitUntilFinished(paymentQueueEvents, 3000); // Correctly wait for job completion
+        const result = await job.waitUntilFinished(paymentQueueEvents, 3000);
 
-        // Check if the result contains the authorization URL
         if (!result.data.authorization_url) {
             throw new Error('Authorization URL not received from Paystack');
         }
@@ -154,7 +152,7 @@ export const saveTransaction = async function(req: Request, res: Response, next:
 
         const { data: user, error: userError } = await database
             .from("users")
-            .select("id")
+            .select("id, delivery_location")
             .eq("email", event.data.customer.email)
             .single();
 
@@ -168,6 +166,8 @@ export const saveTransaction = async function(req: Request, res: Response, next:
             reference: event.data.reference,
             status: event.data.status,
             user_id: user.id,
+            delivery_location:user.delivery_location,
+            product_name:event.data.metadata.product_name,
             product_id: event.data.metadata.product_id,
             amount: event.data.amount / 100
         };

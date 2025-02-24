@@ -16,11 +16,11 @@ const redisConnection = {
 // create a worker to process payments
 export const paymentWorker = new Worker('payments', async function(job:Job){
 
-    const  { user, amount, idempotencyKey, product } = job.data;
+    const  { user, amount, idempotencyKey, product,  } = job.data;
 
      try {
         // convert the amount to cents(paystack)
-        const paystackAmount = amount * 100;
+        const paystackAmount = (amount + user.shipping_fee) * 100;
 
         const payload = {
             email: user.email,

@@ -15,6 +15,7 @@ export const getAllReviews = async function (req: Request, res: Response, next:N
                 status:"success",
                 reviews:JSON.parse(cachedReviews)
             })
+            return;
         }
         let { data:reviews, error } = await database.from("reviews").select("*");
         if(!(reviews) || reviews.length === 0) {
@@ -49,6 +50,7 @@ export const getSingleReview = async function (req:Request, res:Response, next:N
                 status:"success",
                 review: JSON.parse(cachedReview)
             })
+            return
         }
         
         if(!reviewId){

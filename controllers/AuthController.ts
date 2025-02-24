@@ -75,7 +75,7 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
         // Check if the user exists
         const { data: user, error } = await database
             .from("users")
-            .select("id, email, username, password")
+            .select("id, email, username, password, active")
             .eq("email", email)
             .single();
 
@@ -85,6 +85,10 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
 
         if(!user){
             return next(new AppError(`User not found`, 404))
+        }
+
+        if(user.active === false){
+            return next (new AppError(`Please activate your account`, 401))
         }
 
         // Compare passwords

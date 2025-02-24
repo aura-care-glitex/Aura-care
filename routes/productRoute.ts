@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 
 import {
     createProduct,
@@ -8,40 +9,46 @@ import {
     productImage,
     updateProduct
 } from "../controllers/ProductController";
+
 import { protect, restrictTo } from "../controllers/AuthController";
-import multer from "multer";
-import AppError from "../utils/AppError";
 import { authHeaders } from '../middlewares/authorization';
+import AppError from "../utils/AppError";
 
 const router = express.Router();
 
-// Multer Configuration for Image Upload
+// 🔹 Multer Configuration for Image Upload
 const storage = multer.memoryStorage();
 
 const upload = multer({
     storage,
     limits: { fileSize: 300 * 1024 }, // 300KB limit
     fileFilter: (req, file, callback) => {
-        if (!file.originalname.match(/\.(jpg|JPG|jpeg|JPEG|png|PNG)$/)) {
-            return callback(new AppError('Only image files are allowed!', 401));
+        if (!file.mimetype.startsWith("image/")) {
+            return callback(new AppError('Only image files (JPG, PNG, JPEG) are allowed!', 400));
         }
-        callback(null, true); // Accept the file
+        callback(null, true);
     }
 });
 
-// Product Routes
+// 🔹 Product Routes
 router
     .route('/')
-    .get(getAllProducts)
-    .post(protect, authHeaders, restrictTo('admin'), createProduct);
+    .get(getAllProducts) // (Anyone can view products)
+    .post(protect, authHeaders, restrictTo('admin'), createProduct); // Admin Only
 
 router
     .route('/:productId')
-    .get(getSingleProduct)
-    .patch(protect, restrictTo('admin'), updateProduct)
-    .delete(protect, restrictTo('admin'), deleteProduct);
+    .get(getSingleProduct) // Public Route
+    .patch(protect, restrictTo('admin'), updateProduct) // Admin Only
+    .delete(protect, restrictTo('admin'), deleteProduct); // Admin Only
 
-
-router.patch("/image/:productId", protect, restrictTo('admin'), upload.single('file'), productImage);
+// 🔹 Upload Product Image
+router.patch(
+    "/image/:productId",
+    protect, 
+    restrictTo('admin'), 
+    upload.single('file'), 
+    productImage
+);
 
 export default router;

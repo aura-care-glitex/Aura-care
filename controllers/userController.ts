@@ -78,41 +78,58 @@ export const getSingleUser = async function(req:any, res:Response, next:NextFunc
     }
 }
 
-export const softDelete = async function(req:any ,res:Response ,next:NextFunction ){
+// 🔹 Deactivate User (Soft Delete)
+export const softDelete = async function (req: any, res: Response, next: NextFunction) {
     try {
-        const { data:updateError } = await database.from("users").update({ active: false }).eq('id', req.user.id)
 
-        if(updateError){
-            return next(new AppError(`Error getting user`, 400));
+        // Check if the user exists
+        const { data: user, error: userError } = await database.from("users").select("id").eq("id", req.user.id).single();
+        
+        if (userError || !user) {
+            return next(new AppError("User not found", 404));
+        }
+
+        const { data, error } = await database.from("users").update({ active: false }).eq("id", req.user.id);
+
+        if (error) {
+            return next(new AppError("Error deactivating user", 400));
         }
 
         res.status(200).json({
-            status:"success",
-            message:"User deactivated successfully"
-        })
-    }catch (err){
-        return next(new AppError(`Internal server error`, 500))
+            status: "success",
+            message: "User deactivated successfully",
+        });
+    } catch (err) {
+        return next(new AppError("Internal server error", 500));
     }
-}
+};
 
-export const ActivateUser = async function(req:any ,res:Response ,next:NextFunction ){
+// 🔹 Activate User (Admin Only)
+export const ActivateUser = async function (req: any, res: Response, next: NextFunction) {
     try {
         const { userId } = req.params;
+    
+        // Check if the user exists
+        const { data: user, error: userError } = await database.from("users").select("id").eq("id", userId).single();
+        
+        if (userError || !user) {
+            return next(new AppError("User not found", 404));
+        }
 
-        const { data:updateError } = await database.from("users").update({ active: true }).eq('id', userId)
+        const { data, error } = await database.from("users").update({ active: true }).eq("id", userId);
 
-        if(updateError){
-            return next(new AppError(`Error getting user`, 400));
+        if (error) {
+            return next(new AppError("Error activating user", 400));
         }
 
         res.status(200).json({
-            status:"success",
-            message:"User deactivated successfully"
-        })
-    }catch (err){
-        return next(new AppError(`Internal server error`, 500))
+            status: "success",
+            message: "User activated successfully",
+        });
+    } catch (err) {
+        return next(new AppError("Internal server error", 500));
     }
-}
+};
 
 export const updateProfile = async function (req: any, res: Response, next: NextFunction) {
     try {
@@ -128,7 +145,7 @@ export const updateProfile = async function (req: any, res: Response, next: Next
         }
 
         // Filter allowed fields
-        const filteredBody = filteredObj(req.body, "first_name", "last_name", "address", "email");
+        const filteredBody = filteredObj(req.body, "first_name", "last_name", "address", "email", "phonenumber");
 
         if (Object.keys(filteredBody).length === 0) {
             return next(new AppError("No valid fields provided for update", 400));
