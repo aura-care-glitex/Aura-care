@@ -24,6 +24,7 @@ export const getAllUsers = async function(req: Request, res: Response, next: Nex
                 status:"success",
                 data:JSON.parse(cachedUsers)
             })
+            return;
         }
         const { data:users, error } = await database.from("users").select("*").range(0, 10);
         if(users?.length === 0){
@@ -55,6 +56,7 @@ export const getSingleUser = async function(req:any, res:Response, next:NextFunc
                 status:"success",
                 data: JSON.parse(cachedUser)
             })
+            return;
         }
 
         let { data:userData, error } = await database.from("users").select("*").eq("id", req.user.id);

@@ -38,6 +38,8 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
             userData.address = address;
         }
 
+        // send email to confirm user ownership
+
         const { data, error } = await database
             .from("users")
             .insert([userData])
@@ -77,10 +79,13 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
             .from("users")
             .select("id, email, username, password, active")
             .eq("email", email)
-            .single();
+            .maybeSingle();
+
+        console.log(user)
 
         if (error) {
-            return next(new AppError(error.message, 401));
+            console.log(error)
+            return next(new AppError(`(Error) something happened`, 401));
         }
 
         if(!user){
@@ -194,7 +199,7 @@ export const forgotpassword = async function (req: Request, res: Response, next:
         await emailQueue.add("sendEmail",{
             email: user.email,
             subject: "Reset your password",
-            from: process.env.EMAIL_ADDRESS as string,
+            from: process.env.RESEND_EMAIL as string,
             name: user.username,
             message: `You are receiving this email because you (or someone else) requested a password reset. Please copy the OTP token below to complete the process:`,
             otp: otpToken

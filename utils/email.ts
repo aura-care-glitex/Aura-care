@@ -1,10 +1,12 @@
-import nodemailer from 'nodemailer';
 import AppError from './AppError';
 import dotenv from 'dotenv'
+import { Resend } from 'resend';
 
 dotenv.config();
 
-// Options for the sendMail function
+
+const resend = new Resend(process.env.RESEND_API_KEY as string);
+
 type Options = {
     from: any;
     email: string;
@@ -14,7 +16,6 @@ type Options = {
     otp?:any
 };
 
-// Email template generator
 const emailTemplate = (name: string, message: string, otp?: number) => `
 <!DOCTYPE html>
 <html lang="en">
@@ -68,32 +69,17 @@ const emailTemplate = (name: string, message: string, otp?: number) => `
 </html>
 `;
 
-// Function to send an email
 export const sendMail = async (options: Options) => {
     try {
-        // Configure nodemailer transporter
-        const transporter = nodemailer.createTransport({
-            host: "sandbox.smtp.mailtrap.io",
-            port: 2525,
-            auth: {
-            user: process.env.MAILTRAP_USER as string,
-            pass: process.env.MAILTRAP_PASSWORD as string
-            }
-        });
-
-        // Mail options
-        const mailOptions = {
+        // Send the email using Resend
+        const response = await resend.emails.send({
             from: options.from,
             to: options.email,
             subject: options.subject,
             html: emailTemplate(options.name, options.message, options?.otp),
-        };
+        });
 
-        // Send the email
-        const info = await transporter.sendMail(mailOptions);
-
-        // Return success message and info
-        return { message: 'Email sent successfully', info };
+        return { message: 'Email sent successfully', response };
     } catch (error) {
         return new AppError(`Failed to send email: ${(error as Error).message}`, 500);
     }
