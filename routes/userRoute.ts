@@ -45,4 +45,4 @@ router.get('/callback', oAuthCallbackHandler);
 router.get('/google', oAuthMiddleware('google'));
 router.get('/google/userData', Protect, authMiddleware)
 
-export default router;
+export default router; 
