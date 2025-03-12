@@ -19,6 +19,7 @@ import AppError from "./utils/AppError";
 import redis from "./middlewares/redisConfig";
 import { emailWorker } from "./utils/woker-nodes/emailWorker";
 import { paymentWorker } from "./utils/woker-nodes/paymentWorker";
+import swaggerDocs from "./swagger";
 
 // middleware initialization
 app.use(helmet());
@@ -43,6 +44,9 @@ app.get("/", (req: Request, res: Response, next:NextFunction) => {
     message:"version 1.0.0"
   })
 });
+
+// swagger docs
+swaggerDocs(app);
 
 // handling unhandled routes
 app.use("*", (req:Request, res:Response ,next:NextFunction)=>{

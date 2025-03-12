@@ -38,8 +38,6 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
             userData.address = address;
         }
 
-        // send email to confirm user ownership
-
         const { data, error } = await database
             .from("users")
             .insert([userData])
@@ -81,10 +79,7 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
             .eq("email", email)
             .maybeSingle();
 
-        console.log(user)
-
         if (error) {
-            console.log(error)
             return next(new AppError(`(Error) something happened`, 401));
         }
 
@@ -111,7 +106,7 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
         res.status(200).json({
             status:"success",
             token:token,
-            user
+            data: user
         })
     } catch (error) {
         return next(new AppError('Internal server error', 500))

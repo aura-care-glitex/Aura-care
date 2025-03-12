@@ -10,8 +10,12 @@ import {
 } from '../controllers/AuthController';
 import { 
     ActivateUser, 
+    authMiddleware, 
     getAllUsers, 
     getSingleUser, 
+    oAuthCallbackHandler, 
+    oAuthMiddleware, 
+    Protect, 
     softDelete, 
     updateProfile 
 } from "../controllers/userController";
@@ -35,5 +39,10 @@ router.patch('/:userId', protect, restrictTo("admin"), ActivateUser);
 
 // 🔹 Get User Details (Protected)
 router.get('/:id', protect, getSingleUser);
+
+// 🔹 OAuth2 authentication
+router.get('/callback', oAuthCallbackHandler);
+router.get('/google', oAuthMiddleware('google'));
+router.get('/google/userData', Protect, authMiddleware)
 
 export default router;

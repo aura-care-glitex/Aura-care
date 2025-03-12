@@ -168,3 +168,102 @@ export const updateProfile = async function (req: any, res: Response, next: Next
         return next(new AppError("Internal server error", 500));
     }
 };
+
+// Extend Express Request interface
+declare global {
+    namespace Express {
+        interface Request {
+            user?: any;
+        }
+    }
+}
+
+// Handles third-party authentication (Google).
+export const oAuthMiddleware = (provider: 'google') => {
+    return async (req: Request, res: Response) => {
+        try {
+
+            const redirectUrl = process.env.GOOGLE_REDIRECT_URI as string;
+
+            const { data, error } = await database.auth.signInWithOAuth({
+                provider,
+                options: { redirectTo: redirectUrl }
+            });
+
+            if (error || !data.url) {
+                console.error(`OAuth failed: ${error}`);
+                res.status(500).json({ error: `${provider} authentication failed` });
+                return;
+            }
+
+            // Redirect user to the OAuth login page
+            res.redirect(data.url);
+        } catch (error) {
+            console.error(`OAuth ${provider} error:`, error);
+            res.status(500).json({ error: "Internal server error" });
+        }
+    };
+};
+
+// OAuth Callback Handler(session token stored)
+export const oAuthCallbackHandler = async (req: Request, res: Response) => {
+    try {
+        const { data, error } = await database.auth.getSession();
+
+        if (error || !data.session) {
+            res.status(400);
+            return
+        }
+
+        const { access_token } = data.session;
+
+        res.redirect(`https://www.google.com?access_token=${access_token}`);
+    } catch (error) {
+        console.error('OAuth callback error:', error);
+        res.status(500).json({message:"OAuth callback error"});
+    }
+};
+
+// Authentication Middleware
+// Ensures a user is authenticated before accessing protected routes
+export const Protect = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { data: { session }, error } = await database.auth.getSession();
+
+        if (error || !session) {
+            res.status(401).json({ error: 'Unauthorized - Please log in' });
+            return
+        }
+
+        req.user = session.user;
+        next();
+    } catch (error) {
+        console.error('Authentication error:', error);
+        res.status(500).json({ error: 'Authentication check failed' });
+    }
+};
+
+// Protected Route Handler
+// Ensures only authenticated users can access their profile data.
+export const authMiddleware = async (req: Request, res: Response) => {
+    try {
+        const user = req.user;
+
+        if (!user) {
+            res.status(401).json({ error: "Unauthorized" });
+            return;
+        }
+
+        res.status(200).json({
+            message: "Protected profile data",
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.user_metadata?.full_name
+            }
+        });
+    } catch (error) {
+        console.error('Profile error:', error);
+        res.status(500).json({ error: "Failed to fetch profile" });
+    }
+};
