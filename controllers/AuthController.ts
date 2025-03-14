@@ -29,12 +29,11 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
             role: userRole,
         };
 
-        // Only include delivery details if the user is NOT an admin
-        if (userRole !== "admin") {
-            if (!delivery_location || !address) {
-                return next(new AppError("Address and delivery location are required for non-admin users", 400));
-            }
+        // Include delivery details only if they are provided
+        if (delivery_location) {
             userData.delivery_location = delivery_location;
+        }
+        if (address) {
             userData.address = address;
         }
 
@@ -62,6 +61,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
         return next(new AppError("Internal Server Error", 500));
     }
 };
+
 
 // Login user 
 export const loginUser = async function(req:Request, res:Response, next:NextFunction){
