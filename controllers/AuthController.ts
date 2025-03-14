@@ -114,41 +114,58 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
 }
 
 // protect user route
-export const protect = async function (req:any, res:Response, next:NextFunction){
+export const protect = async (req: any, res: Response, next: NextFunction) => {
     try {
-        const authHeaders = req.headers.authorization;
+        const authHeader = req.headers.authorization;
 
-        const token = authHeaders?.split(" ")[1]
-
-        if(!token){
-            return next(new AppError(`No authorization headers`, 402))
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return next(new AppError("No authorization token provided", 401));
         }
 
-        // decode token
-        const decodeToken:any = jwt.verify(token, process.env.JWT_SECRET  as string);
+        const token = authHeader.split(" ")[1];
 
-        // get user from db
+        let userId: string | null = null;
+
+        if (token.startsWith("supabase_")) {
+            // If the token is from Supabase OAuth, validate and extract user ID
+            const { data, error } = await database.auth.getUser(token);
+
+            if (error || !data.user) {
+                return next(new AppError("Invalid Supabase access token", 401));
+            }
+
+            userId = data.user.id; // Extract the user ID from Supabase Auth
+        } else {
+            // Otherwise, assume it's a JWT and verify it
+            let decodedToken: any;
+            try {
+                decodedToken = jwt.verify(token, process.env.JWT_SECRET as string);
+            } catch (error) {
+                return next(new AppError("Invalid or expired token", 401));
+            }
+
+            userId = decodedToken.id;
+        }
+
+        // Fetch the user from your `users` table, using the extracted userId
         const { data: user, error } = await database
             .from("users")
             .select("*")
-            .eq("id", decodeToken.id)
+            .eq("id", userId)
             .single();
 
-        if (error) {
-            return next(new AppError(error.message, 401));
-        }
-
-        if(!user){
-            return next(new AppError(`User not found`, 404))
+        if (error || !user) {
+            return next(new AppError("User not found", 404));
         }
 
         req.user = user;
-
         next();
     } catch (error) {
-        return next(new AppError(`Internal server error`, 500))
+        console.error("Protect Middleware Error:", error);
+        return next(new AppError("Internal server error", 500));
     }
-}
+};
+
 
 // restrict permissions (Authorizations)
 export const restrictTo = function(...roles:string[]){
@@ -213,10 +230,8 @@ export const forgotpassword = async function (req: Request, res: Response, next:
 // reset password
 export const resetPassword = async function (req: Request, res: Response, next: NextFunction) {
     try {
-        // Get token from request parameters
         const { token } = req.params;
 
-        // new Password
         const { password , confirmPassword} = req.body;
 
         if(password !== confirmPassword){
@@ -227,10 +242,8 @@ export const resetPassword = async function (req: Request, res: Response, next: 
             return next(new AppError("Token is required", 400));
         }
 
-        // Hash the token to match the stored hash
         const resetToken = crypto.createHash("sha256").update(token.toString()).digest("hex");
 
-        // Retrieve the user with the matching reset token
         const { data: users, error } = await database.from("users").select("id, username, passwordresettoken, passwordresetexpires").eq("passwordresettoken", resetToken);
 
         if (error || !users || users.length === 0) {
@@ -247,7 +260,6 @@ export const resetPassword = async function (req: Request, res: Response, next: 
         // hash the new password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // create a new password and update passwordresettoken, passwordresetexpires
         const { data:updateError } = await database.from("users").update({ passwordresettoken: null, passwordresetexpires: null, password:hashedPassword}).eq("id",user.id);
 
         if(updateError){

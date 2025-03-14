@@ -638,40 +638,16 @@ router.get("/users/google", oAuthMiddleware("google"));
 
 /**
  * @swagger
- * /users/callback:
+ * /users/auth/callback:
  *   get:
- *     summary: Handle OAuth callback
- *     description: Handles the callback from Google OAuth and retrieves the user's session.
+ *     summary: Handle Google OAuth callback
+ *     description: |
+ *       After successful authentication, Google redirects to this endpoint. The server retrieves the user session and stores user details in the database.
  *     tags:
  *       - Authentication
- *     responses:
- *       302:
- *         description: Redirects user to a URL with an access token.
- *         headers:
- *           Location:
- *             schema:
- *               type: string
- *             description: Redirect URL with access token.
- *       400:
- *         description: OAuth session retrieval failed.
- *       500:
- *         description: Internal server error.
- */
-
-
-/**
- * @swagger
- * /users/google/userData:
- *   get:
- *     summary: Get authenticated user's profile
- *     description: Retrieves the authenticated user's profile data via OAuth. Requires authentication.
- *     tags:
- *       - Authentication
- *     security:
- *       - BearerAuth: []
  *     responses:
  *       200:
- *         description: Returns the authenticated user's profile data.
+ *         description: OAuth login successful
  *         content:
  *           application/json:
  *             schema:
@@ -679,21 +655,66 @@ router.get("/users/google", oAuthMiddleware("google"));
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Protected profile data
+ *                   example: OAuth login successful
+ *                 access_token:
+ *                   type: string
+ *                   example: eyJhbGciOiJIUzI1...
  *                 user:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: string
- *                       example: "123456"
  *                     email:
  *                       type: string
- *                       example: "user@example.com"
  *                     name:
  *                       type: string
- *                       example: "John Doe"
- *       401:
- *         description: Unauthorized - User is not authenticated.
+ *       400:
+ *         description: OAuth session retrieval failed
  *       500:
- *         description: Internal server error.
+ *         description: Internal server error
+ */
+
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Logs out a user
+ *     description: |
+ *       Logs out the user based on the authentication method they used.
+ *       
+ *       - **Supabase Authentication**: The backend will call Supabase's `signOut` method to log the user out.
+ *       - **JWT Authentication**: Since JWTs are stateless, the frontend is responsible for removing the token from local storage, session storage, or cookies.
+ *       
+ *       **Important Notes:**
+ *       - Users authenticated via Supabase Auth will be logged out on both frontend and backend.
+ *       - Users authenticated via JWT must have their tokens cleared on the frontend.
+ *     tags:
+ *       - Authentication
+ *     responses:
+ *       200:
+ *         description: Successfully logged out
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Logged out successfully
+ *       500:
+ *         description: Server error during logout
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: fail
+ *                 message:
+ *                   type: string
+ *                   example: Server error
  */

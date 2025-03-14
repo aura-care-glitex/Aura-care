@@ -1,23 +1,22 @@
 import express from 'express';
 import {
     createUser,
-    forgotpassword,
     loginUser,
-    protect,
+    forgotpassword,
     resetPassword,
-    restrictTo,
-    updatingPassword
+    updatingPassword,
+    protect,
+    restrictTo
 } from '../controllers/AuthController';
 import { 
-    ActivateUser, 
-    authMiddleware, 
-    getAllUsers, 
-    getSingleUser, 
-    oAuthCallbackHandler, 
-    oAuthMiddleware, 
-    Protect, 
-    softDelete, 
-    updateProfile 
+    updateProfile,
+    softDelete,
+    getAllUsers,
+    getSingleUser,
+    ActivateUser,
+    oAuthMiddleware,
+    oAuthCallbackHandler,
+    logoutUser
 } from "../controllers/userController";
 
 const router = express.Router();
@@ -28,6 +27,10 @@ router.post('/login', loginUser);
 router.patch('/forgotPassword', forgotpassword);
 router.patch('/resetPassword/:token', resetPassword);
 
+// 🔹 OAuth Authentication
+router.get('/google', oAuthMiddleware('google'));
+router.get('/auth/callback', oAuthCallbackHandler);
+
 // 🔹 User Profile Management (Protected)
 router.patch('/updatePassword', protect, updatingPassword);
 router.patch('/updateProfile', protect, updateProfile);
@@ -35,14 +38,11 @@ router.patch('/softDelete', protect, softDelete);
 
 // 🔹 Admin-Only Routes
 router.get('/', protect, restrictTo('admin'), getAllUsers);
-router.patch('/:userId', protect, restrictTo("admin"), ActivateUser);
+router.patch('/:userId', protect, restrictTo('admin'), ActivateUser);
+router.post("/logout",protect, restrictTo('admin', 'user'), logoutUser);
 
-// 🔹 Get User Details (Protected)
+
+// 🔹 General User Management (Protected)
 router.get('/:id', protect, getSingleUser);
 
-// 🔹 OAuth2 authentication
-router.get('/callback', oAuthCallbackHandler);
-router.get('/google', oAuthMiddleware('google'));
-router.get('/google/userData', Protect, authMiddleware)
-
-export default router; 
+export default router;

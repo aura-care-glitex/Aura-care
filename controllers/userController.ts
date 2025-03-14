@@ -2,6 +2,9 @@ import { NextFunction, Response,Request } from "express";
 import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import redis from "../middlewares/redisConfig";
+import dotenv from "dotenv"
+
+dotenv.config()
 
 const filteredObj = function (obj: { [key: string]: any }, ...allowedFields: string[]) {
     let newObj: { [key: string]: any } = {};
@@ -205,65 +208,87 @@ export const oAuthMiddleware = (provider: 'google') => {
     };
 };
 
-// OAuth Callback Handler(session token stored)
+// OAuth Callback Handler - Stores session and links user to the database
 export const oAuthCallbackHandler = async (req: Request, res: Response) => {
     try {
+        // Get the user session after login
         const { data, error } = await database.auth.getSession();
 
         if (error || !data.session) {
-            res.status(400);
+            console.log(error)
+            res.status(400).json({ error: "OAuth session retrieval failed" });
             return
         }
 
-        const { access_token } = data.session;
+        const { user } = data.session;
 
-        res.redirect(`https://www.google.com?access_token=${access_token}`);
-    } catch (error) {
-        console.error('OAuth callback error:', error);
-        res.status(500).json({message:"OAuth callback error"});
-    }
-};
+        // Check if the user already exists in the users table
+        const { data: existingUser, error: fetchError } = await database
+            .from("users")
+            .select("*")
+            .eq("email", user.email)
+            .single();
 
-// Authentication Middleware
-// Ensures a user is authenticated before accessing protected routes
-export const Protect = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { data: { session }, error } = await database.auth.getSession();
-
-        if (error || !session) {
-            res.status(401).json({ error: 'Unauthorized - Please log in' });
-            return
+        if (fetchError) {
+            console.error("Error fetching user:", fetchError.message);
         }
 
-        req.user = session.user;
-        next();
-    } catch (error) {
-        console.error('Authentication error:', error);
-        res.status(500).json({ error: 'Authentication check failed' });
-    }
-};
+        // If user doesn't exist, create a new entry
+        if (!existingUser) {
+            const { error: insertError } = await database.from("users").insert([
+                {
+                    id: user.id, // Use the same ID as Supabase Auth
+                    email: user.email,
+                    username: user.user_metadata?.full_name || user.email?.split("@")[0],
+                    first_name: user.user_metadata?.full_name?.split(" ")[0] || null,
+                    last_name: user.user_metadata?.full_name?.split(" ")[1] || null,
+                    role: "user", // Default role
+                },
+            ]);
 
-// Protected Route Handler
-// Ensures only authenticated users can access their profile data.
-export const authMiddleware = async (req: Request, res: Response) => {
-    try {
-        const user = req.user;
-
-        if (!user) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
+            if (insertError) {
+                console.error("Error creating user:", insertError.message);
+                 res.status(500).json({ error: "Failed to create user" });
+                 return
+            }
         }
 
-        res.status(200).json({
-            message: "Protected profile data",
+        // Send access token to the client (or redirect)
+        res.json({
+            message: "OAuth login successful",
+            access_token: data.session.access_token,
             user: {
                 id: user.id,
                 email: user.email,
-                name: user.user_metadata?.full_name
-            }
+                name: user.user_metadata?.full_name,
+            },
         });
     } catch (error) {
-        console.error('Profile error:', error);
-        res.status(500).json({ error: "Failed to fetch profile" });
+        console.error("OAuth callback error:", error);
+        res.status(500).json({ error: "OAuth callback error" });
+    }
+};
+
+export const logoutUser = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // 1️⃣ Clear Supabase session
+        const { error } = await database.auth.signOut();
+
+        if (error) {
+             res.status(500).json({ status: "fail", message: "Failed to log out" });
+             return
+        }
+
+        // 2️⃣ Invalidate session on the client by clearing cookies & local storage
+        res.setHeader("Clear-Site-Data", '"cookies", "storage", "executionContexts"');
+
+        // 3️⃣ Send a success response
+        res.status(200).json({
+            status: "success",
+            message: "Logged out successfully",
+        });
+    } catch (error) {
+        console.error("Logout error:", error);
+        res.status(500).json({ status: "fail", message: "Server error" });
     }
 };
