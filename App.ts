@@ -24,7 +24,9 @@ import swaggerDocs from "./swagger";
 // middleware initialization
 app.use(helmet());
 
-app.use(cors())
+app.use(cors({
+    origin: false
+}))
 
 app.use(morgan('dev'));
 

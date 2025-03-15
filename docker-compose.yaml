@@ -1,0 +1,145 @@
+version: "3.8"
+
+services:
+  backend1:
+    container_name: backend_app_1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - logs:/app/logs
+      - uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES=${JWT_EXPIRES}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_EMAIL=${RESEND_EMAIL}
+      - BASE_URL=${BASE_URL}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_ENDPOINT_URL_S3=${AWS_ENDPOINT_URL_S3}
+      - AWS_ENDPOINT_URL_IAM=${AWS_ENDPOINT_URL_IAM}
+      - AWS_REGION=${AWS_REGION}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PAYSTACK_TEST_SECRET=${PAYSTACK_TEST_SECRET}
+      - PAYSTACK_TEST_PUBLIC=${PAYSTACK_TEST_PUBLIC}
+      - PAYSTACK_INITIALIZE_URL=${PAYSTACK_INITIALIZE_URL}
+      - PAYSTACK_REFERENCE_URL=${PAYSTACK_REFERENCE_URL}
+      - PAYSTACK_TRANSACTIONS_URL=${PAYSTACK_TRANSACTIONS_URL}
+      - PAYSTACK_TRANSACTION_URL=${PAYSTACK_TRANSACTION_URL}
+    networks:
+      - app_network
+
+  backend2:
+    container_name: backend_app_2
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - logs:/app/logs
+      - uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES=${JWT_EXPIRES}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_EMAIL=${RESEND_EMAIL}
+      - BASE_URL=${BASE_URL}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_ENDPOINT_URL_S3=${AWS_ENDPOINT_URL_S3}
+      - AWS_ENDPOINT_URL_IAM=${AWS_ENDPOINT_URL_IAM}
+      - AWS_REGION=${AWS_REGION}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PAYSTACK_TEST_SECRET=${PAYSTACK_TEST_SECRET}
+      - PAYSTACK_TEST_PUBLIC=${PAYSTACK_TEST_PUBLIC}
+      - PAYSTACK_INITIALIZE_URL=${PAYSTACK_INITIALIZE_URL}
+      - PAYSTACK_REFERENCE_URL=${PAYSTACK_REFERENCE_URL}
+      - PAYSTACK_TRANSACTIONS_URL=${PAYSTACK_TRANSACTIONS_URL}
+      - PAYSTACK_TRANSACTION_URL=${PAYSTACK_TRANSACTION_URL}
+    networks:
+      - app_network
+
+  backend3:
+    container_name: backend_app_3
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - logs:/app/logs
+      - uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES=${JWT_EXPIRES}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_EMAIL=${RESEND_EMAIL}
+      - BASE_URL=${BASE_URL}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_ENDPOINT_URL_S3=${AWS_ENDPOINT_URL_S3}
+      - AWS_ENDPOINT_URL_IAM=${AWS_ENDPOINT_URL_IAM}
+      - AWS_REGION=${AWS_REGION}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PAYSTACK_TEST_SECRET=${PAYSTACK_TEST_SECRET}
+      - PAYSTACK_TEST_PUBLIC=${PAYSTACK_TEST_PUBLIC}
+      - PAYSTACK_INITIALIZE_URL=${PAYSTACK_INITIALIZE_URL}
+      - PAYSTACK_REFERENCE_URL=${PAYSTACK_REFERENCE_URL}
+      - PAYSTACK_TRANSACTIONS_URL=${PAYSTACK_TRANSACTIONS_URL}
+      - PAYSTACK_TRANSACTION_URL=${PAYSTACK_TRANSACTION_URL}
+    networks:
+      - app_network
+
+  redis:
+    image: redis:latest
+    container_name: redis_cache
+    restart: always
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx_load_balancer
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend1
+      - backend2
+      - backend3
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  logs:
+  uploads:
+  redis_data:

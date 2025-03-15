@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 
 export const generateOTP = function() {
-    const otpToken = crypto.randomInt(10000, 99999);
+    const otpToken = crypto.randomInt(100000, 999999);
     const passwordResetToken = crypto.createHash('sha256').update(otpToken.toString()).digest('hex');
 
     // Format as "YYYY-MM-DD HH:MM:SS" (without timezone)

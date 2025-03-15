@@ -14,8 +14,6 @@ const redisConnection = {
 
 // Create a worker to process email jobs
 export const emailWorker = new Worker('email', async (job) => {
-  console.log(`Processing Email Job: ${job.id}`);
-  console.log('Email data:', job.data); 
 
   const { email, subject, from, name, message, otp } = job.data;
 
@@ -29,5 +27,5 @@ export const emailWorker = new Worker('email', async (job) => {
 }, { 
   connection: redisConnection, 
   removeOnComplete : { count: 1000 },
-  removeOnFail: { count: 5000}
+  removeOnFail: { count: 5000 }
 });
