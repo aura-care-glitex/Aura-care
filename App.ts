@@ -24,13 +24,18 @@ import swaggerDocs from "./swagger";
 // middleware initialization
 app.use(helmet());
 
+// Allow requests from any origin
 app.use(cors({
-    origin: false
-}))
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(morgan('dev'));
 
 app.use(express.json());
+
+app.options('*', cors());
 
 app.use(express.urlencoded({ extended: true }));
 
