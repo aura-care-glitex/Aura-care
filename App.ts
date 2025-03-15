@@ -2,7 +2,7 @@ import express, { Express, NextFunction, Request, Response } from "express";
 import dotenv from "dotenv";
 import morgan from "morgan";
 import helmet from "helmet";
-import cors from 'cors'
+import cors from "cors";
 import databaseConnect from "./middlewares/database";
 
 dotenv.config();
@@ -10,74 +10,75 @@ dotenv.config();
 const app: Express = express();
 const port = process.env.PORT || 8040;
 
-import userRoute from './routes/userRoute'
+import userRoute from "./routes/userRoute";
 import productRoute from "./routes/productRoute";
 import reviewRoute from "./routes/reviewRoute";
 import paymentRoute from "./routes/paymentRoute";
-import shippingRoute from "./routes/shippingFeeRoute"
+import shippingRoute from "./routes/shippingFeeRoute";
 import AppError from "./utils/AppError";
 import redis from "./middlewares/redisConfig";
 import { emailWorker } from "./utils/woker-nodes/emailWorker";
 import { paymentWorker } from "./utils/woker-nodes/paymentWorker";
 import swaggerDocs from "./swagger";
 
-// middleware initialization
+// Middleware Initialization
 app.use(helmet());
+app.use(morgan("dev"));
 
-// Allow requests from any origin
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// Enable CORS
+app.use(
+  cors({
+    origin: "*", 
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 
-app.use(morgan('dev'));
-
+// Body Parsers
 app.use(express.json());
-
-app.options('*', cors());
-
 app.use(express.urlencoded({ extended: true }));
 
-app.use('/api/v1/users', userRoute);
-app.use('/api/v1/product', productRoute);
-app.use('/api/v1/review', reviewRoute);
-app.use('/api/v1/payment', paymentRoute)
-app.use('/api/v1/shipping', shippingRoute)
+// API Routes
+app.use("/api/v1/users", userRoute);
+app.use("/api/v1/product", productRoute);
+app.use("/api/v1/review", reviewRoute);
+app.use("/api/v1/payment", paymentRoute);
+app.use("/api/v1/shipping", shippingRoute);
 
-app.get("/", (req: Request, res: Response, next:NextFunction) => {
+// Root URL
+app.get("/", (req: Request, res: Response) => {
   res.status(200).json({
-    status:"Welcome to the root url",
-    message:"version 1.0.0"
-  })
+    status: "success",
+    message: "Welcome to the root URL - Version 1.0.0",
+  });
 });
 
-// swagger docs
+// Swagger Docs
 swaggerDocs(app);
 
-// handling unhandled routes
-app.use("*", (req:Request, res:Response ,next:NextFunction)=>{
-    return next(new AppError(`This route ${req.originalUrl} is not yet handled`, 404))
-})
+// Handling Unhandled Routes
+app.use("*", (req: Request, res: Response, next: NextFunction) => {
+  next(new AppError(`This route ${req.originalUrl} is not yet handled`, 404));
+});
 
-// Global error handling
-app.use((err:AppError ,req:Request, res:Response, next:NextFunction)=>{
-    const statusCode = err.statusCode || 500;
-    const status = err.status || "error";
+// Global Error Handling
+app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
+  res.status(err.statusCode || 500).json({
+    status: err.status || "error",
+    message: err.message,
+  });
+});
 
-    res.status(statusCode).json({
-        status:status,
-        message:err.message
-    })
-})
+// Start Server
 async function startServer() {
-    await databaseConnect(); // Establish database connection
-    redis // log in redis
-    emailWorker // woker node
-    paymentWorker
+  await databaseConnect(); 
+  redis;
+  emailWorker; 
+  paymentWorker;
 
-    app.listen(port, () => {
-        console.log(`[server]: Server is running at http://localhost:${port}`);
-    });
+  app.listen(port, () => {
+    console.log(`[server]: Server is running at http://localhost:${port}`);
+  });
 }
-startServer()
+startServer();
