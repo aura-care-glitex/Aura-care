@@ -99,7 +99,7 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
         }
 
         // assign a token
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET as string, {
+        const token = jwt.sign({ sub: user.id }, process.env.JWT_SECRET as string, {
             expiresIn: "1h",
         });
 
@@ -118,7 +118,7 @@ export const protect = async (req: any, res: Response, next: NextFunction) => {
     try {
         const authHeader = req.headers.authorization;
 
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        if (!authHeader || !authHeader.startsWith("Bearer")) {
             return next(new AppError("No authorization token provided", 401));
         }
 
@@ -131,7 +131,7 @@ export const protect = async (req: any, res: Response, next: NextFunction) => {
             return next(new AppError("Invalid or expired token", 401));
         }
 
-        const userId = decodedToken.id;
+        const userId = decodedToken.sub;
 
         // Fetch the user from your `users` table, using the extracted userId
         const { data: user, error } = await database

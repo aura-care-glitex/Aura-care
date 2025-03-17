@@ -26,7 +26,7 @@ export const authHeaders = async function (req: any, res: Response, next: NextFu
 export const decodedToken = async function (token: string): Promise<string | null> {
     try {
         const verifyToken: any = jwt.verify(token, process.env.JWT_SECRET as string);
-        return verifyToken.id;
+        return verifyToken.sub;
     } catch (error:any) {
         console.error("Invalid Token:", error.message);
         return null;
