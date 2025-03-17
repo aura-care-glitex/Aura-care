@@ -7,7 +7,7 @@ import { decodedToken } from "../middlewares/authorization";
 
 export const getAllProducts = async function (req: Request, res: Response, next: NextFunction) {
     try {
-        let { page = 1, limit = 10, category, minPrice, maxPrice, search } = req.query;
+        let { page = 1, limit = 10, category, minPrice, maxPrice, search, brand, texture } = req.query;
 
         // Convert pagination params to numbers
         page = Number(page);
@@ -19,6 +19,12 @@ export const getAllProducts = async function (req: Request, res: Response, next:
 
         if (category) {
             query = query.eq('category', category);
+        }
+        if (brand) {
+            query = query.eq('brand', brand);
+        }
+        if (texture) {
+            query = query.eq('texture', texture);
         }
         if (minPrice) {
             query = query.gte('price', Number(minPrice));
