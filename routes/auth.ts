@@ -1,5 +1,5 @@
 import { createUser, forgotpassword, loginUser, protect, resetPassword, updatingPassword } from "../controllers/AuthController";
-import { ActivateUser, getAllUsers, getSingleUser, oAuthMiddleware, softDelete } from "../controllers/userController";
+import { ActivateUser, getAllUsers, getSingleUser, softDelete } from "../controllers/userController";
 import router from "./userRoute";
 
 /**
@@ -634,7 +634,6 @@ router.patch("/users/:userId", protect, ActivateUser);
  *                   type: string
  *                   example: Google authentication failed
  */
-router.get("/users/google", oAuthMiddleware("google"));
 
 /**
  * @swagger
