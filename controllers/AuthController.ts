@@ -100,7 +100,7 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
 
         // assign a token
         const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET as string, {
-            expiresIn: "7d",
+            expiresIn: "1h",
         });
 
         res.status(200).json({
@@ -124,28 +124,14 @@ export const protect = async (req: any, res: Response, next: NextFunction) => {
 
         const token = authHeader.split(" ")[1];
 
-        let userId: string | null = null;
-
-        if (token.startsWith("supabase_")) {
-            // If the token is from Supabase OAuth, validate and extract user ID
-            const { data, error } = await database.auth.getUser(token);
-
-            if (error || !data.user) {
-                return next(new AppError("Invalid Supabase access token", 401));
-            }
-
-            userId = data.user.id; // Extract the user ID from Supabase Auth
-        } else {
-            // Otherwise, assume it's a JWT and verify it
-            let decodedToken: any;
-            try {
-                decodedToken = jwt.verify(token, process.env.JWT_SECRET as string);
-            } catch (error) {
-                return next(new AppError("Invalid or expired token", 401));
-            }
-
-            userId = decodedToken.id;
+        let decodedToken: any;
+        try {
+            decodedToken = jwt.verify(token, process.env.JWT_SECRET as string);
+        } catch (error) {
+            return next(new AppError("Invalid or expired token", 401));
         }
+
+        const userId = decodedToken.id;
 
         // Fetch the user from your `users` table, using the extracted userId
         const { data: user, error } = await database
@@ -165,7 +151,6 @@ export const protect = async (req: any, res: Response, next: NextFunction) => {
         return next(new AppError("Internal server error", 500));
     }
 };
-
 
 // restrict permissions (Authorizations)
 export const restrictTo = function(...roles:string[]){

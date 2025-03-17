@@ -13,4 +13,4 @@ COPY . .
 
 EXPOSE 8040
 
-CMD ["bun", "start"]
+CMD ["pnpm", "start"]
