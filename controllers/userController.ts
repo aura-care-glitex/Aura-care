@@ -3,6 +3,7 @@ import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import redis from "../middlewares/redisConfig";
 import dotenv from "dotenv"
+import { decodedToken } from "../middlewares/authorization";
 
 dotenv.config()
 
@@ -138,8 +139,9 @@ export const ActivateUser = async function (req: any, res: Response, next: NextF
 
 export const updateProfile = async function (req: any, res: Response, next: NextFunction) {
     try {
+        const userId = await decodedToken(req.token)
         // Get user from the database
-        const { data: userData, error } = await database.from("users").select("*").eq("id", req.user.id);
+        const { data: userData, error } = await database.from("users").select("*").eq("id", userId);
 
         if (error) {
             return next(new AppError("Error fetching user data", 500));

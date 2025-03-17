@@ -15,6 +15,7 @@ import {
     getSingleUser,
     ActivateUser
 } from "../controllers/userController";
+import { authHeaders } from '../middlewares/authorization';
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ router.patch('/resetPassword/:token', resetPassword);
 
 // 🔹 User Profile Management (Protected)
 router.patch('/updatePassword', protect, updatingPassword);
-router.patch('/updateProfile', protect, updateProfile);
+router.patch('/updateProfile', protect, authHeaders, updateProfile);
 router.patch('/softDelete', protect, softDelete);
 
 // 🔹 Admin-Only Routes
