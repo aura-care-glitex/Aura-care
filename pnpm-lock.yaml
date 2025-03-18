@@ -59,6 +59,9 @@ importers:
       multer:
         specifier: 1.4.5-lts.1
         version: 1.4.5-lts.1
+      nodemailer:
+        specifier: ^6.10.0
+        version: 6.10.0
       resend:
         specifier: ^4.1.2
         version: 4.1.2(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -1425,6 +1428,10 @@ packages:
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
     hasBin: true
+
+  nodemailer@6.10.0:
+    resolution: {integrity: sha512-SQ3wZCExjeSatLE/HBaXS5vqUOQk6GtBdIIKxiFdmm01mOQZX/POJkO3SUX1wDiYcwUOJwT23scFSC9fY2H8IA==}
+    engines: {node: '>=6.0.0'}
 
   nodemon@3.1.9:
     resolution: {integrity: sha512-hdr1oIb2p6ZSxu3PB2JWWYS7ZQ0qvaZsc3hK8DR8f02kRzc8rjYmxAIvdz+aYC+8F2IjNaB7HMcSDg8nQpJxyg==}
@@ -3684,6 +3691,8 @@ snapshots:
     dependencies:
       detect-libc: 2.0.3
     optional: true
+
+  nodemailer@6.10.0: {}
 
   nodemon@3.1.9:
     dependencies:

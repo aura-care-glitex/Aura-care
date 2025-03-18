@@ -196,7 +196,7 @@ export const forgotpassword = async function (req: Request, res: Response, next:
         await emailQueue.add("sendEmail",{
             email: user.email,
             subject: "Reset your password",
-            from: process.env.RESEND_EMAIL as string,
+            from: process.env.EMAIL_HOST as string,
             name: user.username,
             message: `You are receiving this email because you (or someone else) requested a password reset. Please copy the OTP token below to complete the process:`,
             otp: otpToken

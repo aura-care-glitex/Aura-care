@@ -1,11 +1,8 @@
 import AppError from './AppError';
-import dotenv from 'dotenv'
-import { Resend } from 'resend';
+import dotenv from 'dotenv';
+import nodemailer from 'nodemailer'
 
 dotenv.config();
-
-
-const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 type Options = {
     from: any;
@@ -69,18 +66,31 @@ const emailTemplate = (name: string, message: string, otp?: number) => `
 </html>
 `;
 
-export const sendMail = async (options: Options) => {
+// function to send email
+export const sendMail = async function(options:Options){
     try {
-        // Send the email using Resend
-        const response = await resend.emails.send({
+        // configure nodemailer transporter
+        const transporter = nodemailer.createTransport({
+            host: process.env.EMAIL_HOST,
+            port: 587,
+            auth:{
+                user: process.env.EMAIL_HOST_USER,
+                pass: process.env.EMAIL_HOST_PASSWORD
+            }
+        })
+
+        // mail options
+        const mailOptions = {
             from: options.from,
             to: options.email,
             subject: options.subject,
-            html: emailTemplate(options.name, options.message, options?.otp),
-        });
+            html: emailTemplate(options.name, options.message, options?.otp)
+        }
 
-        return { message: 'Email sent successfully', response };
+        // send mail
+        const mail = await transporter.sendMail(mailOptions);
+        return { message: 'Email sent successfully', mail}
     } catch (error) {
-        return new AppError(`Failed to send email: ${(error as Error).message}`, 500);
+        return new AppError(`Failed to send email ${(error as Error).message}`, 500)
     }
-};
+}
