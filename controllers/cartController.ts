@@ -2,9 +2,22 @@ import { NextFunction, Request, Response } from "express";
 import AppError from "../utils/AppError";
 import { database } from "../middlewares/database";
 import { decodedToken } from "../middlewares/authorization";
+import redis from "../middlewares/redisConfig";
 
 export const getAllCart = async function (req: any, res: Response, next: NextFunction) {
     try {
+        const cartProducts = "cartProductKey:All";
+
+        const cachedCartProduct = await redis.get(cartProducts)
+
+        if(cachedCartProduct){
+            res.status(200).json({
+                status:"success",
+                cartproduct:JSON.parse(cachedCartProduct)
+            })
+            return
+        }
+
         const userId = await decodedToken(req.token)
 
         if (!userId) {
@@ -49,6 +62,10 @@ export const getAllCart = async function (req: any, res: Response, next: NextFun
                 quantity: cartItem ? cartItem.quantity : 1 // Default to 1 if not found (shouldn't happen)
             };
         });
+
+        // add the product details to the cache
+        await redis.setex(cartProducts, 60, JSON.stringify(cartWithDetails));
+
         res.status(200).json({
             status: "success",
             data: cartWithDetails
