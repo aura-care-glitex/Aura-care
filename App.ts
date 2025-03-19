@@ -15,6 +15,7 @@ import productRoute from "./routes/productRoute";
 import reviewRoute from "./routes/reviewRoute";
 import paymentRoute from "./routes/paymentRoute";
 import shippingRoute from "./routes/shippingFeeRoute";
+import cartRoute from "./routes/cartRoute";
 import AppError from "./utils/AppError";
 import redis from "./middlewares/redisConfig";
 import { emailWorker } from "./utils/woker-nodes/emailWorker";
@@ -31,7 +32,7 @@ app.use(
     origin: [
       "http://localhost:3000",
       "http://127.0.0.1:3000",
-      "http://live-frontend-url"
+      "https://skin-care-tan.vercel.app"
     ],
     credentials: true,
   })
@@ -44,6 +45,7 @@ app.use(express.urlencoded({ extended: true }));
 // API Routes
 app.use("/api/v1/users", userRoute);
 app.use("/api/v1/product", productRoute);
+app.use("/api/v1/cart", cartRoute)
 app.use("/api/v1/review", reviewRoute);
 app.use("/api/v1/payment", paymentRoute);
 app.use("/api/v1/shipping", shippingRoute);
