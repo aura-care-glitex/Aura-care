@@ -21,6 +21,7 @@ import redis from "./middlewares/redisConfig";
 import { emailWorker } from "./utils/woker-nodes/emailWorker";
 import { paymentWorker } from "./utils/woker-nodes/paymentWorker";
 import swaggerDocs from "./swagger";
+import orderRoute from "./routes/orderRoute";
 
 // Middleware Initialization
 app.use(helmet());
@@ -45,7 +46,8 @@ app.use(express.urlencoded({ extended: true }));
 // API Routes
 app.use("/api/v1/users", userRoute);
 app.use("/api/v1/product", productRoute);
-app.use("/api/v1/cart", cartRoute)
+app.use("/api/v1/cart", cartRoute);
+app.use("/api/v1/order", orderRoute);
 app.use("/api/v1/review", reviewRoute);
 app.use("/api/v1/payment", paymentRoute);
 app.use("/api/v1/shipping", shippingRoute);
