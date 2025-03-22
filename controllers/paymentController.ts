@@ -12,21 +12,11 @@ dotenv.config();
 
 export const initializePayment = async function(req: any, res: Response, next: NextFunction) {
     try {
-        const { email, amount, productName } = req.body;
-
-        const { data: product, error: productError } = await database
-            .from("products")
-            .select("id, product_name")
-            .eq("product_name", productName)
-            .single();
-
-        if (productError || !product) {
-            return next(new AppError(`This product does not exist`, 404));
-        }
+        const  amount  = req.body.amount;
 
         const userId = await decodedToken(req.token)
 
-        const { data: user, error: userError } = await database.from('users').select('email, shipping_fee ').eq('id', userId).single();
+        const { data: user, error: userError } = await database.from('users').select('email').eq('id', userId).single();
         if (!user) {
             return next(new AppError(`User not found`, 404));
         }
@@ -46,7 +36,7 @@ export const initializePayment = async function(req: any, res: Response, next: N
         await redis.set(idempotencyKey, 'Processing', 'EX', 300);
 
         // Add payment job to queue
-        const job = await paymentQueue.add('process-payment', { user, amount, idempotencyKey, product }, { priority: 1 });
+        const job = await paymentQueue.add('process-payment', { user, amount, idempotencyKey }, { priority: 1 });
 
         // wait for the job to finish
         const result = await job.waitUntilFinished(paymentQueueEvents, 3000);
@@ -150,9 +140,10 @@ export const saveTransaction = async function(req: Request, res: Response, next:
             return next(new AppError("Unhandled event type", 400));
         }
 
+        // 🔹 Get User from Transaction Email
         const { data: user, error: userError } = await database
             .from("users")
-            .select("id, delivery_location")
+            .select("id")
             .eq("email", event.data.customer.email)
             .single();
 
@@ -160,30 +151,83 @@ export const saveTransaction = async function(req: Request, res: Response, next:
             return next(new AppError("User not found", 404));
         }
 
+        const userId = user.id;
+
+        // 🔹 Save Transaction
         const transactionData = {
             email: event.data.customer.email,
             transaction_date: event.data.paid_at,
             reference: event.data.reference,
             status: event.data.status,
-            user_id: user.id,
-            delivery_location:user.delivery_location,
-            product_name:event.data.metadata.product_name,
-            product_id: event.data.metadata.product_id,
+            user_id: userId,
             amount: event.data.amount / 100
         };
 
-        const { data, error } = await database.from("transactions").insert([transactionData]);
-
-        if (error) {
+        const { data: transaction, error: transactionError } = await database.from("transactions").insert([transactionData]);
+        if (transactionError) {
             return next(new AppError("Failed to save transaction", 500));
         }
 
+        // 🔹 Fetch the Order (User's Most Recent Order)
+        const { data: order, error: orderError } = await database
+            .from("orders")
+            .select("id")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })  // Get the latest order
+            .limit(1)
+            .single();
+
+        if (orderError || !order) {
+            return next(new AppError("No pending order found for this user", 404));
+        }
+
+        const orderId = order.id;
+
+        // 🔹 Get Cart Items
+        const { data: cartItems, error: cartError } = await database
+            .from("cart")
+            .select("product_id, quantity")
+            .eq("user_id", userId);
+
+        if (cartError) return next(new AppError(`Error fetching cart: ${cartError.message}`, 500));
+        if (!cartItems.length) return next(new AppError("Cart is empty", 400));
+
+        // 🔹 Get Product Prices
+        const productIds = cartItems.map(item => item.product_id);
+        const { data: products, error: productError } = await database
+            .from("products")
+            .select("id, price")
+            .in("id", productIds);
+
+        if (productError) return next(new AppError(`Error fetching products: ${productError.message}`, 500));
+
+        // 🔹 Prepare Order Items
+        const orderItems = cartItems.map(item => {
+            const product = products.find(p => p.id === item.product_id);
+            return {
+                order_id: orderId,
+                product_id: item.product_id,
+                quantity: item.quantity,
+                unit_price: product ? product.price : 0
+            };
+        });
+
+        // 🔹 Insert Order Items
+        const { error: orderItemsError } = await database.from("order_items").insert(orderItems);
+        if (orderItemsError) return next(new AppError(`Error adding items to order: ${orderItemsError.message}`, 500));
+
+        // 🔹 Clear User’s Cart
+        await database.from("cart").delete().eq("user_id", userId);
+
         res.status(200).json({
             status: "success",
-            message: "Transaction saved successfully"
+            message: "Transaction recorded and order placed successfully",
+            // transaction_id: transaction[0]?.id,
+            order_id: orderId
         });
 
     } catch (error: any) {
+        console.error(error);
         return next(new AppError(`Webhook processing failed: ${error.message}`, 500));
     }
 };

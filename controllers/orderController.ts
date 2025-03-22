@@ -7,7 +7,7 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
     try {
         const userId = await decodedToken(req.token)
 
-        const { deliveryType, stageId, delivery_location } = req.body;
+        const { deliveryType, stageId } = req.body;
 
         if (!userId || !deliveryType) {
             return next(new AppError("User ID and delivery type are required", 400));
@@ -61,25 +61,16 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
         // 🔹 Create Order
         const { data: order, error: orderError } = await database
             .from("orders")
-            .insert([{ user_id: userId, total_price: totalPrice, delivery_type: deliveryType, delivery_stage_id: stageId, delivery_fee: deliveryFee, delivery_location: delivery_location }])
+            .insert([{ user_id: userId, total_price: totalPrice, delivery_type: deliveryType, delivery_stage_id: stageId, delivery_fee: deliveryFee, delivery_location: stageId.name }])
             .select("id")
             .single();
 
         if (orderError) return next(new AppError(`Error creating order: ${orderError.message}`, 500));
-        const orderId = order.id;
-
-        // 🔹 Insert Order Items
-        const orderItemsInsert = orderItems.map(item => ({ order_id: orderId, product_id: item.product_id, quantity: item.quantity, unit_price: item.unit_price }));
-        const { error: orderItemsError } = await database.from("order_items").insert(orderItemsInsert);
-        if (orderItemsError) return next(new AppError(`Error adding items to order: ${orderItemsError.message}`, 500));
-
-        // 🔹 Clear User's Cart
-        await database.from("cart").delete().eq("user_id", userId);
 
         res.status(201).json({
             status: "success",
             message: "Order placed successfully",
-            order_id: orderId,
+            order_id: order.id,
             total_price: totalPrice,
             delivery_fee: deliveryFee
         });

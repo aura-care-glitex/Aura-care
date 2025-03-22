@@ -10,7 +10,7 @@ export const getAllShippingFees = async (req: Request, res: Response, next: Next
         const start = (Number(page) - 1) * Number(limit);
         const end = start + Number(limit) - 1;
 
-        let query = database.from("shipping_fees").select("*");
+        let query = database.from("psv_stages").select("*");
 
         if (location) query = query.ilike("location", `%${location}%`);
 
@@ -33,7 +33,7 @@ export const getSingleShippingFee = async (req: Request, res: Response, next: Ne
         const { id } = req.params;
 
         const { data, error } = await database
-            .from("shipping_fees")
+            .from("psv_stages")
             .select("*")
             .eq("id", id)
             .single();
@@ -49,13 +49,13 @@ export const getSingleShippingFee = async (req: Request, res: Response, next: Ne
 // Create a new shipping fee
 export const createShippingFee = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { location, fee } = req.body;
+        const { name, delivery_fee } = req.body;
 
-        if (!location || !fee) return next(new AppError("Location and fee are required", 400));
+        if (!name || !delivery_fee) return next(new AppError("Location name and delivery fees are required", 400));
 
         const { data, error } = await database
-            .from("shipping_fees")
-            .insert([{ location, fee }])
+            .from("psv_stages")
+            .insert([{ name, delivery_fee }])
             .select()
             .single();
 
@@ -71,11 +71,11 @@ export const createShippingFee = async (req: Request, res: Response, next: NextF
 export const updateShippingFee = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const { location, fee } = req.body;
+        const { name, delivery_fee } = req.body;
 
         const { data, error } = await database
-            .from("shipping_fees")
-            .update({ location, fee })
+            .from("psv_stages")
+            .update({ name, delivery_fee })
             .eq("id", id)
             .select()
             .single();
@@ -93,7 +93,7 @@ export const deleteShippingFee = async (req: Request, res: Response, next: NextF
     try {
         const { id } = req.params;
 
-        const { error } = await database.from("shipping_fees").delete().eq("id", id);
+        const { error } = await database.from("psv_stages").delete().eq("id", id);
 
         if (error) return next(new AppError("Shipping fee not found", 404));
 
