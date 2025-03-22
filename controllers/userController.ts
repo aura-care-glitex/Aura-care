@@ -159,7 +159,7 @@ export const updateProfile = async function (req: any, res: Response, next: Next
         }
 
         // Update user profile
-        const { error: updateError } = await database.from("users").update(filteredBody).eq("id", req.user.id);
+        const { error: updateError } = await database.from("users").update(filteredBody).eq("id", userId);
 
         if (updateError) {
             return next(new AppError("Error updating profile", 500));
