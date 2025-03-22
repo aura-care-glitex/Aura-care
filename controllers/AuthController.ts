@@ -12,7 +12,7 @@ dotenv.config()
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { email, password, username, phonenumber, role, delivery_location, address } = req.body;
+        const { email, password, username, role} = req.body;
 
         if (!email || !password || !username) {
             return next(new AppError("Email, password, and username are required", 400));
@@ -25,22 +25,13 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
             email,
             password: await bcrypt.hash(password, 10),
             username,
-            phonenumber,
             role: userRole,
         };
-
-        // Include delivery details only if they are provided
-        if (delivery_location) {
-            userData.delivery_location = delivery_location;
-        }
-        if (address) {
-            userData.address = address;
-        }
 
         const { data, error } = await database
             .from("users")
             .insert([userData])
-            .select("id, email, username, phonenumber, role, delivery_location, address, shipping_fee");
+            .select("id, email, username,role");
 
         if (error) {
             return next(new AppError(error.message, 400));
