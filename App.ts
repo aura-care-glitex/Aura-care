@@ -8,7 +8,7 @@ import databaseConnect from "./middlewares/database";
 dotenv.config();
 
 const app: Express = express();
-const port = process.env.PORT || 7000;
+const port = process.env.PORT || 8040;
 
 import userRoute from "./routes/userRoute";
 import productRoute from "./routes/productRoute";

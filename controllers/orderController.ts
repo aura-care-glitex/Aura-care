@@ -5,9 +5,8 @@ import { decodedToken } from "../middlewares/authorization";
 
 export const checkout = async (req: any, res: Response, next: NextFunction) => {
     try {
-        const userId = await decodedToken(req.token)
-
-        const { deliveryType, stageId } = req.body;
+        const userId = await decodedToken(req.token);
+        const { deliveryType, stageId, storeAddress, county, deliveryLocation } = req.body;
 
         if (!userId || !deliveryType) {
             return next(new AppError("User ID and delivery type are required", 400));
@@ -42,8 +41,9 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
         });
 
         let deliveryFee = 0;
+        let stageName = null;
         
-        // 🔹 Handle PSV Delivery Fee
+        // 🔹 Handle PSV Delivery
         if (deliveryType === "PSV" && stageId) {
             const { data: stage, error: stageError } = await database
                 .from("psv_stages")
@@ -55,13 +55,34 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
             if (!stage) return next(new AppError("Invalid PSV stage", 400));
 
             deliveryFee = stage.delivery_fee;
-            totalPrice += deliveryFee; // Add delivery fee to total price
+            stageName = stage.name;
         }
+
+        // 🔹 Handle Outside Nairobi Delivery
+        if (deliveryType === "Outside Nairobi" && !county) {
+            return next(new AppError("County is required for 'Outside Nairobi' deliveries", 400));
+        }
+
+        // 🔹 Handle Express Delivery
+        if (deliveryType === "Express Delivery" && !storeAddress) {
+            return next(new AppError("Store address is required for 'Express Delivery'", 400));
+        }
+
+        totalPrice += deliveryFee; // Add delivery fee to total price
 
         // 🔹 Create Order
         const { data: order, error: orderError } = await database
             .from("orders")
-            .insert([{ user_id: userId, total_price: totalPrice, delivery_type: deliveryType, delivery_stage_id: stageId, delivery_fee: deliveryFee, delivery_location: stageId.name }])
+            .insert([{
+                user_id: userId,
+                total_price: totalPrice,
+                delivery_type: deliveryType,
+                delivery_stage_id: deliveryType === "PSV" ? stageId : null,
+                delivery_location: deliveryType === "PSV" ? stageName : deliveryLocation,
+                store_address: deliveryType === "Express Delivery" ? storeAddress : null,
+                county: deliveryType === "Outside Nairobi" ? county : null,
+                delivery_fee: deliveryFee
+            }])
             .select("id")
             .single();
 
@@ -71,7 +92,7 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
             status: "success",
             message: "Order placed successfully",
             order_id: order.id,
-            total_price: totalPrice,
+            total_price: parseFloat(totalPrice.toFixed(2)),
             delivery_fee: deliveryFee
         });
 
