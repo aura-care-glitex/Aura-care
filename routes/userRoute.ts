@@ -16,14 +16,17 @@ import {
     ActivateUser
 } from "../controllers/userController";
 import { authHeaders } from '../middlewares/authorization';
+import { AdminForgotPassword, AdminResetPassword } from '../controllers/AdminController';
 
 const router = express.Router();
 
 // 🔹 Authentication Routes
 router.post('/register', createUser);
 router.post('/login', loginUser);
+router.post('/adminForgotPassword', AdminForgotPassword);
 router.patch('/forgotPassword', forgotpassword);
 router.patch('/resetPassword/:token', resetPassword);
+router.patch('/adminResetPassword', AdminResetPassword)
 
 // 🔹 User Profile Management (Protected)
 router.patch('/updatePassword', protect, updatingPassword);

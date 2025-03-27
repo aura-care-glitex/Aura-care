@@ -5,15 +5,16 @@ import nodemailer from 'nodemailer'
 dotenv.config();
 
 type Options = {
-    from: any;
+    from: string;
     email: string;
     subject: string;
     name: string; 
     message: string;
-    otp?:any
+    otp?:number,
+    magic_Link?: string
 };
 
-const emailTemplate = (name: string, message: string, otp?: number) => `
+const emailTemplate = (name: string, message: string, otp?: number, magic_Link?: string) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,6 +39,13 @@ const emailTemplate = (name: string, message: string, otp?: number) => `
                 <div style="background-color: #BBDEFB; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
                     <p style="font-size: 13px; color: #555555; margin: 0 0 10px 0;">Your verification code:</p>
                     <div style="font-size: 24px; font-weight: bold; color: #0D47A1; letter-spacing: 2px;">${otp}</div>
+                    <p style="font-size: 12px; color: #555555; margin: 10px 0 0 0;">This code expires in 10 minutes</p>
+                </div>` : ''}
+                
+                ${magic_Link ? `
+                <div style="background-color: #BBDEFB; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
+                    <p style="font-size: 13px; color: #555555; margin: 0 0 10px 0;">Your magic link is:</p>
+                    <div style="font-size: 24px; font-weight: bold; color: #0D47A1; letter-spacing: 2px;">${magic_Link}</div>
                     <p style="font-size: 12px; color: #555555; margin: 10px 0 0 0;">This code expires in 10 minutes</p>
                 </div>` : ''}
             </div>
