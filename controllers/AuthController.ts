@@ -66,7 +66,7 @@ export const loginUser = async function(req:Request, res:Response, next:NextFunc
         // Check if the user exists
         const { data: user, error } = await database
             .from("users")
-            .select("id, email, username, password, active")
+            .select("id, email, username, password, active, role")
             .eq("email", email)
             .maybeSingle();
 
