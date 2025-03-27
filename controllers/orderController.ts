@@ -165,7 +165,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
         });
 
         // Cache the result for 60 seconds
-        await redis.setex(key, 60, JSON.stringify({ formattedOrders, totals }));
+        await redis.setex(key, 60, JSON.stringify( { orders:formattedOrders, totals }));
 
         res.status(200).json({
             status: "success",
