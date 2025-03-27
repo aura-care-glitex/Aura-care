@@ -208,7 +208,8 @@ export const saveTransaction = async function(req: Request, res: Response, next:
                 order_id: orderId,
                 product_id: item.product_id,
                 quantity: item.quantity,
-                unit_price: product ? product.price : 0
+                unit_price: product ? product.price : 0,
+                user_id:userId
             };
         });
 
