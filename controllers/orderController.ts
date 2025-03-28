@@ -3,6 +3,7 @@ import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import { decodedToken } from "../middlewares/authorization";
 import redis from "../middlewares/redisConfig";
+import OrderItem from "./../utils/types"
 
 export const checkout = async (req: any, res: Response, next: NextFunction) => {
     try {
@@ -214,17 +215,17 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     }
 };
 
-// single order module
-export const singleOrderModule = async function(req: Request, res: Response, next: NextFunction) {
+
+
+export const singleOrderModule = async function (req: Request, res: Response, next: NextFunction) {
     try {
         const { orderId } = req.params;
 
-        if(!orderId) return next(new AppError(`Order id is required`, 404))
-        console.log(orderId)
+        if (!orderId) return next(new AppError("Order ID is required", 400));
 
         const key = `single_order:${orderId}`;
 
-        // Check Redis cache
+        // 🔹 Check Redis Cache
         const cachedOrderModule = await redis.get(key);
         if (cachedOrderModule) {
             res.status(200).json({
@@ -234,37 +235,59 @@ export const singleOrderModule = async function(req: Request, res: Response, nex
             return;
         }
 
-        // Fetch order details with user and delivery information
-        const { data: order, error } = await database
+        const { data: orderItems, error: orderItemsError } = await database
             .from("order_items")
             .select(`
                 order_id,
+                product_id,
                 quantity,
                 unit_price,
-                users:user_id(id,username, phonenumber, email),
-                orders(delivery_type, delivery_location, total_price)
+                orders!inner(
+                    total_price,
+                    delivery_fee,
+                    delivery_type,
+                    delivery_location,
+                    user_id,
+                    users:user_id(id, username, phonenumber, email)
+                ),
+                products:product_id(stock_quantity, product_name)
             `)
-            .eq("id", orderId)
-            .single();
+            .eq("id", orderId);
 
-        console.log(order)
 
-        if (error) {
-            console.error("Database error:", error);
+        if (orderItemsError) {
+            console.error("Database error:", orderItemsError);
             return next(new AppError("Failed to fetch order", 500));
         }
 
-        if (!order) {
+        if (!orderItems || orderItems.length === 0) {
             return next(new AppError("Order not found", 404));
         }
 
-        // get products bought by the user
-        const { data, error:Error} = await database
-            .from("orders")
-            .select()
+        // 🔹 Structure response with all purchased products
+        const orderData = {
+            order_id: (orderItems[0] as any).order_id,
+            user: (orderItems[0] as any).orders?.users ,
+            total_price: (orderItems[0] as any).orders?.total_price,
+            shipping_fee: (orderItems[0] as any).orders?.delivery_fee,
+            grand_total: ((orderItems[0] as any).orders?.total_price ) + ((orderItems[0] as any).orders?.delivery_fee),
+            delivery_type: (orderItems[0] as any).orders?.delivery_type,
+            delivery_location: (orderItems[0] as any).orders?.delivery_location ,
+            products: orderItems.map((item: any) => ({
+                product_id: item.product_id,
+                quantity: item.quantity,
+                price_cost: item.unit_price * item.quantity,
+                stock_quantity: item.products?.stock_quantity,
+                product_name: item.products?.product_name,
+            })),
+        };
+
+        // 🔹 Store in Redis for caching
+        await redis.set(key, JSON.stringify(orderData), "EX", 60);
 
         res.status(200).json({
             status: "success",
+            order: orderData,
         });
 
     } catch (error) {
@@ -272,12 +295,3 @@ export const singleOrderModule = async function(req: Request, res: Response, nex
         return next(new AppError("Internal server error", 500));
     }
 };
-
-// get all orders
-export const getAllOrders_2 = async function(req:Request, res:Response, next:NextFunction){
-    try {
-         
-    } catch (error) {
-        
-    }
-}
