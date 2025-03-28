@@ -74,29 +74,32 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
 
         totalPrice += deliveryFee; // Add delivery fee to total price
 
-        // 🔹 Create Order
-        const { data: order, error: orderError } = await database
+        // 🔹 Create ONE ORDER ROW PER PRODUCT
+        const orderInserts = orderItems.map(item => ({
+            user_id: userId,
+            product_id: item.product_id,   // Include product-specific data
+            total_price: item.unit_price * item.quantity, // Price for this product's contribution
+            number_of_items_bought: numberOfItemsBought,
+            delivery_type: deliveryType,
+            delivery_stage_id: deliveryType === "PSV" ? stageId : null,
+            delivery_location: deliveryType === "PSV" ? stageName : deliveryLocation,
+            store_address: deliveryType === "Express Delivery" ? storeAddress : null,
+            county: deliveryType === "Outside Nairobi" ? county : null,
+            delivery_fee: deliveryFee
+        }));
+        
+        // Insert all product-specific order rows
+        const { data: orders, error: orderError } = await database
             .from("orders")
-            .insert([{
-                user_id: userId,
-                total_price: totalPrice,
-                number_of_items_bought: numberOfItemsBought,
-                delivery_type: deliveryType,
-                delivery_stage_id: deliveryType === "PSV" ? stageId : null,
-                delivery_location: deliveryType === "PSV" ? stageName : deliveryLocation,
-                store_address: deliveryType === "Express Delivery" ? storeAddress : null,
-                county: deliveryType === "Outside Nairobi" ? county : null,
-                delivery_fee: deliveryFee
-            }])
-            .select("id")
-            .single();
-
-        if (orderError) return next(new AppError(`Error creating order: ${orderError.message}`, 500));
-
+            .insert(orderInserts)
+            .select("id");
+        
+        if (orderError) return next(new AppError(`Error creating orders: ${orderError.message}`, 500));
+        
+        // Return the first order ID as a reference (or adjust as needed)
         res.status(201).json({
             status: "success",
             message: "Order placed successfully",
-            order_id: order.id,
             total_price: parseFloat(totalPrice.toFixed(2)),
             delivery_fee: deliveryFee
         });
@@ -210,3 +213,71 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
         return next(new AppError("Internal Server Error", 500));
     }
 };
+
+// single order module
+export const singleOrderModule = async function(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { orderId } = req.params;
+
+        if(!orderId) return next(new AppError(`Order id is required`, 404))
+        console.log(orderId)
+
+        const key = `single_order:${orderId}`;
+
+        // Check Redis cache
+        const cachedOrderModule = await redis.get(key);
+        if (cachedOrderModule) {
+            res.status(200).json({
+                status: "success",
+                order: JSON.parse(cachedOrderModule),
+            });
+            return;
+        }
+
+        // Fetch order details with user and delivery information
+        const { data: order, error } = await database
+            .from("order_items")
+            .select(`
+                order_id,
+                quantity,
+                unit_price,
+                users:user_id(id,username, phonenumber, email),
+                orders(delivery_type, delivery_location, total_price)
+            `)
+            .eq("id", orderId)
+            .single();
+
+        console.log(order)
+
+        if (error) {
+            console.error("Database error:", error);
+            return next(new AppError("Failed to fetch order", 500));
+        }
+
+        if (!order) {
+            return next(new AppError("Order not found", 404));
+        }
+
+        // get products bought by the user
+        const { data, error:Error} = await database
+            .from("orders")
+            .select()
+
+        res.status(200).json({
+            status: "success",
+        });
+
+    } catch (error) {
+        console.error("Error fetching single order:", error);
+        return next(new AppError("Internal server error", 500));
+    }
+};
+
+// get all orders
+export const getAllOrders_2 = async function(req:Request, res:Response, next:NextFunction){
+    try {
+         
+    } catch (error) {
+        
+    }
+}
