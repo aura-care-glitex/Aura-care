@@ -153,6 +153,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
                 delivery_fee,
                 created_at,
                 tracking_status,
+                delivery_type,
                 delivery_location,
                 users:user_id ( username, phonenumber ),
                 order_items ( quantity )
@@ -203,6 +204,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             phone_number: order.users?.phonenumber ?? "N/A",
             total_items_bought: (order.order_items ?? []).reduce((sum: any, item: { quantity: any; }) => sum + (item.quantity ?? 0), 0),
             location: order.delivery_location ?? "N/A",
+            delivery_type: order.delivery_type,
             order_date: order.created_at,
             order_cost: order.total_price ?? 0
         }));
