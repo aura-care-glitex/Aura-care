@@ -132,8 +132,8 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
 
 export const getAllOrders = async function (req: Request, res: Response, next: NextFunction) {
     try {
-        const { status } = req.query; // ✅ Get status filter from query param
-        const key = `orders:${status || "all"}`; // ✅ Cache based on status
+        const { status } = req.query;
+        const key = `orders:${status || "all"}`;
 
         const cachedOrders = await redis.get(key);
         if (cachedOrders) {
@@ -164,7 +164,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             return next(new AppError("Failed to fetch orders", 500));
         }
 
-        // ✅ Initialize totals (always included)
+        // ✅ Initialize totals
         const totals: Record<string, number> = {
             Pending: 0,
             Dispatched: 0,
@@ -172,19 +172,8 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             Cancelled: 0
         };
 
-        // ✅ Exclude orders with NULL tracking_status
-        const validOrders = orders.filter(order => order.tracking_status !== null);
-
-        // ✅ Compute totals for each status
-        validOrders.forEach(order => {
-            const orderCost = order.total_price ?? 0;
-            if (totals.hasOwnProperty(order.tracking_status)) {
-                totals[order.tracking_status] += orderCost;
-            }
-        });
-
-        // ✅ Return "No orders found" if no valid orders exist
-        if (!validOrders.length) {
+        // ✅ Check if there are no orders at all
+        if (!orders || orders.length === 0) {
             res.status(404).json({
                 status: "error",
                 message: "No orders found",
@@ -193,10 +182,31 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             return;
         }
 
-        // ✅ Filter orders based on query parameter (if provided)
+        // ✅ Exclude orders with NULL tracking_status
+        const validOrders = orders.filter(order => order.tracking_status !== null);
+
+        // ✅ Compute totals
+        validOrders.forEach(order => {
+            const orderCost = order.total_price ?? 0;
+            if (totals.hasOwnProperty(order.tracking_status)) {
+                totals[order.tracking_status] += orderCost;
+            }
+        });
+
+        // ✅ Filter orders based on status
         const filteredOrders = status
             ? validOrders.filter(order => order.tracking_status === status)
             : validOrders;
+
+        // ✅ Return "No orders found" if there are no orders after filtering
+        if (filteredOrders.length === 0) {
+            res.status(404).json({
+                status: "error",
+                message: "No orders found",
+                totals
+            });
+            return;
+        }
 
         // ✅ Format filtered orders
         const formattedOrders = filteredOrders.map(order => ({
@@ -205,7 +215,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             phone_number: order.users?.phonenumber ?? "N/A",
             total_items_bought: (order.order_items ?? []).reduce((sum: number, item: { quantity: number }) => sum + (item.quantity ?? 0), 0),
             location: order.delivery_location ?? "N/A",
-            delivery_options: order.delivery_type ?? "N/A", 
+            delivery_options: order.delivery_type ?? "N/A",
             order_date: order.created_at,
             order_cost: order.total_price ?? 0
         }));
@@ -224,8 +234,6 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
         return next(new AppError("Internal server error", 500));
     }
 };
-
-
 
 export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
