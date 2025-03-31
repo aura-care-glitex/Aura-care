@@ -153,7 +153,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
                 delivery_fee,
                 created_at,
                 tracking_status,
-                delivery_type,
+                delivery_type, -- Ensure this column exists in your database
                 delivery_location,
                 users:user_id ( username, phonenumber ),
                 order_items ( quantity )
@@ -185,12 +185,12 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
 
         // ✅ Return "No orders found" if no valid orders exist
         if (!validOrders.length) {
-             res.status(404).json({
+            res.status(404).json({
                 status: "error",
                 message: "No orders found",
-                totals // ✅ Ensure totals still appear even if no orders exist
+                totals
             });
-            return
+            return;
         }
 
         // ✅ Filter orders based on query parameter (if provided)
@@ -200,11 +200,12 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
 
         // ✅ Format filtered orders
         const formattedOrders = filteredOrders.map(order => ({
+            order_id: order.id,
             customer_name: order.users?.username ?? "Unknown",
             phone_number: order.users?.phonenumber ?? "N/A",
-            total_items_bought: (order.order_items ?? []).reduce((sum: any, item: { quantity: any; }) => sum + (item.quantity ?? 0), 0),
+            total_items_bought: (order.order_items ?? []).reduce((sum: number, item: { quantity: number }) => sum + (item.quantity ?? 0), 0),
             location: order.delivery_location ?? "N/A",
-            delivery_type: order.delivery_type,
+            delivery_options: order.delivery_type ?? "N/A", 
             order_date: order.created_at,
             order_cost: order.total_price ?? 0
         }));
@@ -223,6 +224,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
         return next(new AppError("Internal server error", 500));
     }
 };
+
 
 
 export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction) => {
