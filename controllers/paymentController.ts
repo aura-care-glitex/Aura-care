@@ -171,7 +171,7 @@ export const saveTransaction = async function(req: Request, res: Response, next:
         // 🔹 Fetch the Order (User's Most Recent Order)
         const { data: order, error: orderError } = await database
             .from("orders")
-            .select("id")
+            .select("id, order_status")
             .eq("user_id", userId)
             .order("created_at", { ascending: false })  // Get the latest order
             .limit(1)
@@ -183,6 +183,19 @@ export const saveTransaction = async function(req: Request, res: Response, next:
 
         const orderId = order.id;
 
+        // 🔹 Update Order Status to "Success" & Set Initial Tracking Status to "Pending"
+        const { error: orderUpdateError } = await database
+            .from("orders")
+            .update({ 
+                order_status: "success",
+                tracking_status: "Pending"  // Initial tracking status
+            })
+            .eq("id", orderId);
+
+        if (orderUpdateError) {
+            return next(new AppError(`Error updating order status: ${orderUpdateError.message}`, 500));
+        }
+
         // 🔹 Get Cart Items
         const { data: cartItems, error: cartError } = await database
             .from("cart")
@@ -192,38 +205,12 @@ export const saveTransaction = async function(req: Request, res: Response, next:
         if (cartError) return next(new AppError(`Error fetching cart: ${cartError.message}`, 500));
         if (!cartItems.length) return next(new AppError("Cart is empty", 400));
 
-        // 🔹 Get Product Prices
-        const productIds = cartItems.map(item => item.product_id);
-        const { data: products, error: productError } = await database
-            .from("products")
-            .select("id, price")
-            .in("id", productIds);
-
-        if (productError) return next(new AppError(`Error fetching products: ${productError.message}`, 500));
-
-        // 🔹 Prepare Order Items
-        const orderItems = cartItems.map(item => {
-            const product = products.find(p => p.id === item.product_id);
-            return {
-                order_id: orderId,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: product ? product.price : 0,
-                user_id:userId
-            };
-        });
-
-        // 🔹 Insert Order Items
-        const { error: orderItemsError } = await database.from("order_items").insert(orderItems);
-        if (orderItemsError) return next(new AppError(`Error adding items to order: ${orderItemsError.message}`, 500));
-
         // 🔹 Clear User’s Cart
         await database.from("cart").delete().eq("user_id", userId);
 
         res.status(200).json({
             status: "success",
             message: "Transaction recorded and order placed successfully",
-            // transaction_id: transaction[0]?.id,
             order_id: orderId
         });
 

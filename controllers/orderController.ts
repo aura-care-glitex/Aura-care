@@ -3,7 +3,8 @@ import AppError from "../utils/AppError";
 import {database} from "../middlewares/database";
 import { decodedToken } from "../middlewares/authorization";
 import redis from "../middlewares/redisConfig";
-import OrderItem from "./../utils/types"
+import type { Order, User, OrderedItem } from "./../utils/types";
+
 
 export const checkout = async (req: any, res: Response, next: NextFunction) => {
     try {
@@ -32,7 +33,7 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
 
         if (productError) return next(new AppError(`Error fetching products: ${productError.message}`, 500));
 
-        // 🔹 Calculate Total Price
+        // 🔹 Calculate Total Price & Order Items
         let totalPrice = 0;
         const orderItems = cartItems.map(item => {
             const product = products.find(p => p.id === item.product_id);
@@ -47,7 +48,7 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
 
         let deliveryFee = 0;
         let stageName = null;
-        
+
         // 🔹 Handle PSV Delivery
         if (deliveryType === "PSV" && stageId) {
             const { data: stage, error: stageError } = await database
@@ -75,32 +76,50 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
 
         totalPrice += deliveryFee; // Add delivery fee to total price
 
-        // 🔹 Create ONE ORDER ROW PER PRODUCT
-        const orderInserts = orderItems.map(item => ({
+        const { data: orderData, error: orderError } = await database
+        .from("orders")
+        .insert([{
             user_id: userId,
-            product_id: item.product_id,   // Include product-specific data
-            total_price: item.unit_price * item.quantity, // Price for this product's contribution
+            total_price: totalPrice,
             number_of_items_bought: numberOfItemsBought,
             delivery_type: deliveryType,
             delivery_stage_id: deliveryType === "PSV" ? stageId : null,
             delivery_location: deliveryType === "PSV" ? stageName : deliveryLocation,
             store_address: deliveryType === "Express Delivery" ? storeAddress : null,
             county: deliveryType === "Outside Nairobi" ? county : null,
-            delivery_fee: deliveryFee
+            delivery_fee: deliveryFee,
+            order_status: "pending"
+        }])
+        .select("id")
+        .single();
+        
+        if (orderError || !orderData || !orderData.id) {
+            return next(new AppError("Failed to create order", 500));
+        }
+        
+        const orderId = orderData.id;
+        
+        // 🔹 Insert Products into `ordered_items`
+        const orderedItemsInserts = orderItems.map(item => ({
+            order_id: orderId,  // Link to the new order
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_price: item.unit_price
         }));
         
-        // Insert all product-specific order rows
-        const { data: orders, error: orderError } = await database
-            .from("orders")
-            .insert(orderInserts)
-            .select("id");
+        const { error: orderedItemsError } = await database
+            .from("order_items")
+            .insert(orderedItemsInserts);
         
-        if (orderError) return next(new AppError(`Error creating orders: ${orderError.message}`, 500));
+        if (orderedItemsError) {
+            return next(new AppError(`Error inserting ordered items: ${orderedItemsError.message}`, 500));
+        }
         
-        // Return the first order ID as a reference (or adjust as needed)
+
         res.status(201).json({
             status: "success",
             message: "Order placed successfully",
+            order_id: orderId,
             total_price: parseFloat(totalPrice.toFixed(2)),
             delivery_fee: deliveryFee
         });
@@ -111,9 +130,10 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
     }
 };
 
+
 export const getAllOrders = async function (req: Request, res: Response, next: NextFunction) {
     try {
-        const key = "order_items:all";
+        const key = "orders:all";
 
         const cachedOrders = await redis.get(key);
         if (cachedOrders) {
@@ -124,66 +144,49 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             return;
         }
 
-        // Fetch orders with user and order details 
+        // ✅ Fetch orders with customer details, phone number & order summary
         const { data: orders, error } = await database
-            .from("order_items")
+            .from("orders")
             .select(`
                 id,
-                quantity,
+                total_price,
+                delivery_fee,
                 created_at,
-                orders:order_id (delivery_type, delivery_location, total_price, number_of_items_bought, status),
-                users:user_id (username, phonenumber)
-            `);
+                tracking_status = "success"
+                delivery_location,
+                users:user_id ( username, phonenumber ),
+                order_items ( quantity )
+            `)
+            .eq("tracking_status", "Pending") as unknown as { data: Order[]; error: any };
 
+            console.log(orders)
         if (error) {
             console.error("Database error:", error);
             return next(new AppError("Failed to fetch orders", 500));
         }
 
-        // Format response safely
-        const formattedOrders = orders.map(order => ({
-            order_id: order.id,
-            customer_name: (order.users as any)?.username,
-            phonenumber: (order.users as any)?.phonenumber,
-            number_of_items_bought: (order.orders as any)?.number_of_items_bought,
-            status: (order.orders as any)?.status,
-            delivery_options: (order.orders as any)?.delivery_type,
-            location: (order.orders as any)?.delivery_location,
-            order_cost: (order.orders as any)?.total_price,
-            order_date: order.created_at
+        // ✅ Format response to match the required structure
+        const formattedOrders = orders.map((order: Order) => ({
+            customer_name: order.users?.username ?? "Unknown",
+            phone_number: order.users?.phonenumber ?? "N/A",
+            total_items_bought: order.order_items.reduce((sum: any, item: { quantity: any; }) => sum + (item.quantity ?? 0), 0),
+            location: order.delivery_location ?? "N/A",
+            order_date: order.created_at,
+            order_cost: parseFloat(((order.total_price ?? 0) - (order.delivery_fee ?? 0)).toFixed(2))
         }));
 
-        // Calculate the total cost for each order status
-        const totals = {
-            Pending: 0,
-            Dispatched: 0,
-            Delivered: 0,
-            Cancelled: 0
-        };
-
-        formattedOrders.forEach(order => {
-            const status = order.status as keyof typeof totals;
-            if (totals.hasOwnProperty(status)) {
-                totals[status] += order.order_cost || 0;
-            }
-        });
-
-        // Cache the result for 60 seconds
-        await redis.setex(key, 60, JSON.stringify( { orders:formattedOrders, totals }));
+        // ✅ Cache the result for 60 seconds
+        await redis.setex(key, 60, JSON.stringify(formattedOrders));
 
         res.status(200).json({
             status: "success",
-            data: {
-                orders: formattedOrders,
-                totals
-            },
+            data: formattedOrders
         });
     } catch (error) {
         console.error(`Error getting all orders:`, error);
         return next(new AppError("Internal server error", 500));
     }
 };
-
 
 export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -196,31 +199,42 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
             return next(new AppError("Invalid order status", 400));
         }
 
-        // Update order status in the database
-        const { error } = await database
+        // Check if the order exists
+        const { data: existingOrder, error: fetchError } = await database
             .from("orders")
-            .update({ status })
+            .select("id")
+            .eq("id", orderId)
+            .single();
+
+        if (fetchError || !existingOrder) {
+            return next(new AppError("Order not found", 404));
+        }
+
+        // Update order status in the database
+        const { error: updateError } = await database
+            .from("orders")
+            .update({ order_status: status })
             .eq("id", orderId);
 
-        if (error) return next(new AppError(`Error updating status: ${error.message}`, 500));
+        if (updateError) {
+            return next(new AppError(`Error updating status: ${updateError.message}`, 500));
+        }
 
         res.status(200).json({
             status: "success",
-            message: `Order status updated to ${status}`
+            message: `Order status updated to ${status}`,
         });
 
     } catch (error) {
-        console.error(error);
+        console.error("Server Error:", error);
         return next(new AppError("Internal Server Error", 500));
     }
 };
 
 
-
-export const singleOrderModule = async function (req: Request, res: Response, next: NextFunction) {
+export const singleOrderModule = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { orderId } = req.params;
-
         if (!orderId) return next(new AppError("Order ID is required", 400));
 
         const key = `single_order:${orderId}`;
@@ -235,6 +249,7 @@ export const singleOrderModule = async function (req: Request, res: Response, ne
             return;
         }
 
+        // Fetch data from the database
         const { data: orderItems, error: orderItemsError } = await database
             .from("order_items")
             .select(`
@@ -247,13 +262,12 @@ export const singleOrderModule = async function (req: Request, res: Response, ne
                     delivery_fee,
                     delivery_type,
                     delivery_location,
-                    user_id,
+                    created_at,
                     users:user_id(id, username, phonenumber, email)
                 ),
-                products:product_id(stock_quantity, product_name)
+                products:product_id(stock_quantity, product_name, imageurl)
             `)
-            .eq("id", orderId);
-
+            .eq("order_id", orderId);
 
         if (orderItemsError) {
             console.error("Database error:", orderItemsError);
@@ -264,22 +278,35 @@ export const singleOrderModule = async function (req: Request, res: Response, ne
             return next(new AppError("Order not found", 404));
         }
 
-        // 🔹 Structure response with all purchased products
-        const orderData = {
-            order_id: (orderItems[0] as any).order_id,
-            user: (orderItems[0] as any).orders?.users ,
-            total_price: (orderItems[0] as any).orders?.total_price,
-            shipping_fee: (orderItems[0] as any).orders?.delivery_fee,
-            grand_total: ((orderItems[0] as any).orders?.total_price ) + ((orderItems[0] as any).orders?.delivery_fee),
-            delivery_type: (orderItems[0] as any).orders?.delivery_type,
-            delivery_location: (orderItems[0] as any).orders?.delivery_location ,
-            products: orderItems.map((item: any) => ({
-                product_id: item.product_id,
+        // 🔹 Structure response
+        const orderData: any = {
+            order_id: orderItems[0].order_id,
+            user: (orderItems[0].orders as any).users
+                ? {
+                    id: (orderItems[0].orders as any).users.id || "N/A",
+                    username: (orderItems[0].orders as any).users.username || "N/A",
+                    email: (orderItems[0].orders as any).users.email || "N/A",
+                    phonenumber: (orderItems[0].orders as any).users.phonenumber || "N/A"
+                }
+                : null,
+            order_date: (orderItems[0].orders as any).created_at
+                ? new Date((orderItems[0].orders as any).created_at).toLocaleString()
+                : "N/A",
+            total_price: ((orderItems[0].orders as any).total_price || 0).toFixed(2),
+            shipping_fee: (orderItems[0].orders as any).delivery_fee || 0,
+            grand_total: (
+                ((orderItems[0].orders as any).total_price || 0) +
+                ((orderItems[0].orders as any).delivery_fee || 0)
+            ).toFixed(2),
+            delivery_type: (orderItems[0].orders as any).delivery_type || "N/A",
+            delivery_location: (orderItems[0].orders as any).delivery_location || "N/A",
+            ordered_items: orderItems.map((item: any) => ({
+                product_name: item.products?.product_name || "Unknown",
+                imageUrl: item.products?.imageurl || null,
                 quantity: item.quantity,
-                price_cost: item.unit_price * item.quantity,
-                stock_quantity: item.products?.stock_quantity,
-                product_name: item.products?.product_name,
-            })),
+                stock_quantity: item.products?.stock_quantity || 0,
+                price_cost: (item.unit_price * item.quantity).toFixed(2),
+            }))
         };
 
         // 🔹 Store in Redis for caching
@@ -289,9 +316,9 @@ export const singleOrderModule = async function (req: Request, res: Response, ne
             status: "success",
             order: orderData,
         });
-
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error fetching single order:", error);
         return next(new AppError("Internal server error", 500));
     }
 };
+
