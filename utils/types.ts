@@ -15,6 +15,7 @@ export interface OrderedItem {
 }
 
 export interface Order {
+  tracking_status: any;
   order_items: any;
   delivery_fee: number;
   id: string;  // UUID format for order IDs

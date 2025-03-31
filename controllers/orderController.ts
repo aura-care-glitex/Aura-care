@@ -130,21 +130,21 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
     }
 };
 
-
 export const getAllOrders = async function (req: Request, res: Response, next: NextFunction) {
     try {
-        const key = "orders:all";
+        const { status } = req.query; // ✅ Get status filter from query param
+        const key = `orders:${status || "all"}`; // ✅ Cache based on status
 
         const cachedOrders = await redis.get(key);
         if (cachedOrders) {
             res.status(200).json({
                 status: "success",
-                data: JSON.parse(cachedOrders),
+                ...JSON.parse(cachedOrders),
             });
             return;
         }
 
-        // ✅ Fetch orders with customer details, phone number & order summary
+        // ✅ Fetch all orders
         const { data: orders, error } = await database
             .from("orders")
             .select(`
@@ -152,41 +152,76 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
                 total_price,
                 delivery_fee,
                 created_at,
-                tracking_status = "success"
+                tracking_status,
                 delivery_location,
                 users:user_id ( username, phonenumber ),
                 order_items ( quantity )
-            `)
-            .eq("tracking_status", "Pending") as unknown as { data: Order[]; error: any };
+            `) as unknown as { data: Order[]; error: any };
 
-            console.log(orders)
         if (error) {
             console.error("Database error:", error);
             return next(new AppError("Failed to fetch orders", 500));
         }
 
-        // ✅ Format response to match the required structure
-        const formattedOrders = orders.map((order: Order) => ({
+        // ✅ Initialize totals (always included)
+        const totals: Record<string, number> = {
+            Pending: 0,
+            Dispatched: 0,
+            Delivered: 0,
+            Cancelled: 0
+        };
+
+        // ✅ Exclude orders with NULL tracking_status
+        const validOrders = orders.filter(order => order.tracking_status !== null);
+
+        // ✅ Compute totals for each status
+        validOrders.forEach(order => {
+            const orderCost = order.total_price ?? 0;
+            if (totals.hasOwnProperty(order.tracking_status)) {
+                totals[order.tracking_status] += orderCost;
+            }
+        });
+
+        // ✅ Return "No orders found" if no valid orders exist
+        if (!validOrders.length) {
+             res.status(404).json({
+                status: "error",
+                message: "No orders found",
+                totals // ✅ Ensure totals still appear even if no orders exist
+            });
+            return
+        }
+
+        // ✅ Filter orders based on query parameter (if provided)
+        const filteredOrders = status
+            ? validOrders.filter(order => order.tracking_status === status)
+            : validOrders;
+
+        // ✅ Format filtered orders
+        const formattedOrders = filteredOrders.map(order => ({
             customer_name: order.users?.username ?? "Unknown",
             phone_number: order.users?.phonenumber ?? "N/A",
-            total_items_bought: order.order_items.reduce((sum: any, item: { quantity: any; }) => sum + (item.quantity ?? 0), 0),
+            total_items_bought: (order.order_items ?? []).reduce((sum: any, item: { quantity: any; }) => sum + (item.quantity ?? 0), 0),
             location: order.delivery_location ?? "N/A",
             order_date: order.created_at,
-            order_cost: parseFloat(((order.total_price ?? 0) - (order.delivery_fee ?? 0)).toFixed(2))
+            order_cost: order.total_price ?? 0
         }));
 
-        // ✅ Cache the result for 60 seconds
-        await redis.setex(key, 60, JSON.stringify(formattedOrders));
+        // ✅ Cache response for 60 seconds
+        await redis.setex(key, 60, JSON.stringify({ data: formattedOrders, totals }));
 
         res.status(200).json({
             status: "success",
-            data: formattedOrders
+            data: formattedOrders,
+            totals
         });
-    } catch (error) {
-        console.error(`Error getting all orders:`, error);
+
+    } catch (error: any) {
+        console.error(`Error getting orders:`, error);
         return next(new AppError("Internal server error", 500));
     }
 };
+
 
 export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
