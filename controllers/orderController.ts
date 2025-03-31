@@ -153,7 +153,7 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
                 delivery_fee,
                 created_at,
                 tracking_status,
-                delivery_type, -- Ensure this column exists in your database
+                delivery_type,
                 delivery_location,
                 users:user_id ( username, phonenumber ),
                 order_items ( quantity )
