@@ -77,9 +77,7 @@ export const getAllProducts = async function (req: Request, res: Response, next:
 
 export const createProduct = async (req: any, res: Response, next: NextFunction) => {
     try {
-
-        const userId = await decodedToken(req.token)
-
+        const userId = await decodedToken(req.token);
         // Fetch the user from the database
         const { data: user, error: userError } = await database.from('users').select('role').eq('id', userId).single();
 
@@ -91,12 +89,7 @@ export const createProduct = async (req: any, res: Response, next: NextFunction)
             return next(new AppError(`Error getting user`, 404))
         }
 
-        // Check if the user has an "admin" role
-        if (user.role !== 'admin') {
-            return next(new AppError(`You are not authorized to create a product`, 403));
-        }
-
-        const { product_name, brand, size, key_ingredients, skin_type, texture, usage,imageurl ,price,stock_quantity , category} = req.body;
+        const { product_name, brand, size, key_ingredients,description, skin_type, texture, usage,imageurl ,price,stock_quantity , category} = req.body;
 
         // Check if all necessary fields are provided
         if (!product_name || !brand || !size || !key_ingredients || !skin_type || !texture || !usage) {
@@ -116,7 +109,7 @@ export const createProduct = async (req: any, res: Response, next: NextFunction)
             stock_quantity,
             texture,
             usage,
-            user_id: userId
+            Description:description
         }]).select();
 
         if (error) {
@@ -253,7 +246,7 @@ export const productImage = async function (req: Request, res: Response, next: N
             return next(new AppError("No file uploaded", 400));
         }
 
-        const { data: product, error } = await database.from("products").select("*").eq("id", productId);
+        const { data: product, error } = await database.from("products").select("*").eq("id", productId).single();
 
         if (error) {
             return next(new AppError(`Database error: ${error.message}`, 500));
@@ -278,7 +271,7 @@ export const productImage = async function (req: Request, res: Response, next: N
         }
 
         // Delete old image if it exists
-        const oldImageUrl = product[0].imageUrl;
+        const oldImageUrl = product[0].imageurl;
 
         if (oldImageUrl) {
             const oldImageKey = oldImageUrl.split("/").pop(); // Extract the image key

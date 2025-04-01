@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const s3Client = new S3Client({
-    region: process.env.AWS_REGION as string ,
-    endpoint: process.env.AWS_ENDPOINT_URL_S3 as string,
+    region: process.env.AWS_REGION as string,
+    endpoint: process.env.AWS_ENDPOINT_URL_S3 as string, // Supabase Storage URL
     forcePathStyle: true,
     credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID as string,
@@ -13,12 +13,12 @@ const s3Client = new S3Client({
     }
 });
 
-export const uploadImage = async function (file:any){
+export const uploadImage = async function (file: any) {
     try {
-        const fileName = `image-${file.originalname}`;
+        const fileName = `image-${Date.now()}-${file.originalname}`; // Unique filename
 
         const uploadParams = {
-            Bucket: "calendery",
+            Bucket: "product-images", // Ensure correct bucket name
             Key: fileName,
             Body: file.buffer,
             ContentType: file.mimetype
@@ -27,25 +27,25 @@ export const uploadImage = async function (file:any){
         await s3Client.send(new PutObjectCommand(uploadParams));
 
         // Construct the image URL
-        const imageUrl = `${process.env.AWS_ENDPOINT_URL_S3}/calendery/${fileName}`;
+        const imageUrl = `${process.env.AWS_ENDPOINT_URL_S3}/product-images/${fileName}`;
 
-        return { imageUrl:imageUrl, imageKey: fileName }; // Return URL and key to store in database
+        return { imageUrl, imageKey: fileName }; // Return URL and key to store in database
     } catch (error) {
-        console.log("S3 Upload Error:", error);
+        console.error("S3 Upload Error:", error);
         return null;
     }
 };
 
-export const deleteImage = async function (imageKey:string){
+export const deleteImage = async function (imageKey: string) {
     try {
         const deleteParams = {
-            Bucket: "calendery",
+            Bucket: "product-images",
             Key: imageKey
         };
 
         await s3Client.send(new DeleteObjectCommand(deleteParams));
-        console.log("Old image deleted successfully")
+        console.log("✅ Image deleted successfully");
     } catch (error) {
-        console.log("S3 Delete Error:", error);
+        console.error("❌ S3 Delete Error:", error);
     }
-}
+};
