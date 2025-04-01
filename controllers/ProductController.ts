@@ -264,7 +264,7 @@ export const productImage = async function (req: Request, res: Response, next: N
         }
 
         // Update the product imageUrl in the database
-        const { error: updateError } = await database.from("products").update({ imageurl: imageUploadResult.imageUrl }).eq("id", productId);
+        const { error: updateError } = await database.from("products").update({ imageurl: imageUploadResult.imageurl }).eq("id", productId);
 
         if (updateError) {
             return next(new AppError(`Error updating product image: ${updateError.message}`, 500));
@@ -288,7 +288,7 @@ export const productImage = async function (req: Request, res: Response, next: N
         res.status(200).json({
             status: "success",
             message: "Product image updated successfully",
-            imageUrl: imageUploadResult.imageUrl
+            imageUrl: imageUploadResult.imageurl
         });
 
     } catch (err) {
