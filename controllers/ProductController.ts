@@ -266,9 +266,6 @@ export const productImage = async function (req: Request, res: Response, next: N
         // Update the product imageUrl in the database
         const { error: updateError } = await database.from("products").update({ imageurl: imageUploadResult.imageurl }).eq("id", productId);
 
-        console.log("🔍 Product Query Result:", product);
-        console.log("🔍 Query Error:", error);
-
         if (updateError) {
             return next(new AppError(`Error updating product image: ${updateError.message}`, 500));
         }
