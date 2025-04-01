@@ -27,9 +27,9 @@ export const uploadImage = async function (file: any) {
         await s3Client.send(new PutObjectCommand(uploadParams));
 
         // Construct the image URL
-        const imageUrl = `${process.env.AWS_ENDPOINT_URL_S3}/product-images/${fileName}`;
+        const imageurl = `${process.env.AWS_ENDPOINT_URL_S3}/product-images/${fileName}`;
 
-        return { imageUrl, imageKey: fileName }; // Return URL and key to store in database
+        return { imageurl, imageKey: fileName }; // Return URL and key to store in database
     } catch (error) {
         console.error("S3 Upload Error:", error);
         return null;
