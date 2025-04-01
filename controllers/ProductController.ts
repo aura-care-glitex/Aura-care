@@ -268,13 +268,14 @@ export const productImage = async function (req: Request, res: Response, next: N
 
         console.log("🔍 Product Query Result:", product);
         console.log("🔍 Query Error:", error);
-        
+
         if (updateError) {
             return next(new AppError(`Error updating product image: ${updateError.message}`, 500));
         }
 
         // Delete old image if it exists
-        const oldImageUrl = product[0].imageurl;
+        const oldImageUrl = product?.imageurl;
+        console.log(oldImageUrl)
 
         if (oldImageUrl) {
             const oldImageKey = oldImageUrl.split("/").pop(); // Extract the image key
