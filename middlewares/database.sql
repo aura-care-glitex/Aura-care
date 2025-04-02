@@ -91,3 +91,12 @@ CREATE TABLE product_reviews (
     created_at TIMESTAMP DEFAULT NOW(),
     UNIQUE (user_id, product_id) -- Ensures a user can review a product only once
 );
+
+CREATE TABLE categories (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    image_url VARCHAR(500),  -- Stores the URL of the uploaded image
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

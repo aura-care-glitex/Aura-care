@@ -16,6 +16,7 @@ import reviewRoute from "./routes/reviewRoute";
 import paymentRoute from "./routes/paymentRoute";
 import shippingRoute from "./routes/shippingFeeRoute";
 import cartRoute from "./routes/cartRoute";
+import categoryRoute  from "./routes/categoryRoute";
 import AppError from "./utils/AppError";
 import redis from "./middlewares/redisConfig";
 import { emailWorker } from "./utils/woker-nodes/emailWorker";
@@ -50,6 +51,7 @@ app.use("/api/v1/cart", cartRoute);
 app.use("/api/v1/order", orderRoute);
 app.use("/api/v1/review", reviewRoute);
 app.use("/api/v1/payment", paymentRoute);
+app.use("/api/v1/category", categoryRoute)
 app.use("/api/v1/shipping", shippingRoute);
 
 // Root URL

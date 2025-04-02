@@ -49,7 +49,7 @@ export const initializePayment = async function(req: any, res: Response, next: N
             status: 'success',
             message: 'Payment initialized successfully',
             url: result.data
-        });;
+        });
 
     } catch (err: any) {
         console.log(err.message);
