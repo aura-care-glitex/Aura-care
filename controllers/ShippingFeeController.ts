@@ -97,7 +97,9 @@ export const deleteShippingFee = async (req: Request, res: Response, next: NextF
 
         if (error) return next(new AppError("Shipping fee not found", 404));
 
-        res.status(204).send(); 
+        res.status(200).json({
+            data: null
+        }); 
     } catch (err) {
         return next(new AppError("Error deleting shipping fee", 500));
     }
