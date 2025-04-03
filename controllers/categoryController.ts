@@ -91,7 +91,7 @@ export const getSingleCategory = async function(req:Request, res:Response, next:
         }
         const { data, error } = await database
             .from("categories")
-            .select("*")
+            .select("*, products(*)")
             .eq("id", id)
             .single();
 
