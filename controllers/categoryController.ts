@@ -25,47 +25,55 @@ export const createCategory = async function(req:Request, res:Response, next:Nex
     }
 }
 
-export const getAllCategories = async function(req:Request, res:Response, next:NextFunction){
+export const getAllCategories = async function(req: Request, res: Response, next: NextFunction) {
     try {
         const { page = 1, limit = 10 } = req.query;
         const start = (Number(page) - 1) * Number(limit);
         const end = start + Number(limit) - 1;
 
-        const key = `all-categories`
+        const key = `all-categories-${page}-${limit}`;
 
-        const cachedCategories = await redis.get(key)
-        if(cachedCategories){
-            res.status(200).json({
-                status:"success",
-                data: JSON.parse(cachedCategories),
-                page,
-                limit
-            });
-            return
+        const cachedCategories = await redis.get(key);
+        if (cachedCategories) {
+            res.status(200).json(JSON.parse(cachedCategories));
+            return;
         }
 
+        // Fetch total count of categories
+        const { count, error: countError } = await database
+            .from("categories")
+            .select("*", { count: "exact", head: true });
+
+        if (countError) {
+            return next(new AppError(`Error getting total categories: ${countError.message}`, 500));
+        }
+
+        // Fetch paginated categories along with their associated products
         const { data, error } = await database
             .from("categories")
-            .select("*")
+            .select("*, products(*)")
             .order("created_at", { ascending: false })
             .range(start, end);
 
-        if(error){
-            return next(new AppError(`Error getting categories`, 401))
+        if (error) {
+            return next(new AppError(`Error getting categories: ${error.message}`, 500));
         }
 
-        await redis.setex(key, 60, JSON.stringify(data));
+        const response = {
+            status: "success",
+            data,
+            page: Number(page),
+            limit: Number(limit),
+            totalCount: count
+        };
 
-        res.status(200).json({ 
-            status: "success", 
-            data : data,
-            page,
-            limit
-        });
+        await redis.setex(key, 60, JSON.stringify(response));
+
+        res.status(200).json(response);
     } catch (error) {
-        return next(new AppError(`Internal server error`, 500))
+        return next(new AppError(`Internal server error`, 500));
     }
-}
+};
 
 export const getSingleCategory = async function(req:Request, res:Response, next:NextFunction){
     try {

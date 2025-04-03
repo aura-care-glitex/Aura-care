@@ -38,6 +38,16 @@ export const getAllProducts = async function (req: Request, res: Response, next:
 
         const key = `products:page-${page}:limit-${limit}:category-${category || 'all'}:price-${minPrice || '0'}-${maxPrice || 'max'}:search-${search || 'none'}`;
 
+
+        // Fetch total count of categories
+        const { count, error: countError } = await database
+            .from("products")
+            .select("*", { count: "exact", head: true });
+    
+        if (countError) {
+            return next(new AppError(`Error getting total products: ${countError.message}`, 500));
+        }
+
         // Check Redis cache
         const cachedProducts = await redis.get(key);
         if (cachedProducts) {
@@ -45,7 +55,8 @@ export const getAllProducts = async function (req: Request, res: Response, next:
                 status: 'success',
                 products: JSON.parse(cachedProducts),
                 page,
-                limit
+                limit,
+                totalCount: count
             });
             return
         }
@@ -67,8 +78,11 @@ export const getAllProducts = async function (req: Request, res: Response, next:
             status: "success",
             data: products,
             page,
-            limit
+            limit,
+            totalCount: count
         });
+
+        await redis.setex(key, 60, JSON.stringify(products));
 
     } catch (err) {
         return next(new AppError("Internal server error", 500));
@@ -78,8 +92,10 @@ export const getAllProducts = async function (req: Request, res: Response, next:
 export const createProduct = async (req: any, res: Response, next: NextFunction) => {
     try {
         const userId = await decodedToken(req.token);
+        console.log(userId)
         // Fetch the user from the database
         const { data: user, error: userError } = await database.from('users').select('role').eq('id', userId).single();
+        console.log(user)
 
         if (!user) {
             return next(new AppError(`User not found`, 404)); // User not found error
@@ -89,12 +105,25 @@ export const createProduct = async (req: any, res: Response, next: NextFunction)
             return next(new AppError(`Error getting user`, 404))
         }
 
-        const { product_name, brand, size, key_ingredients,description, skin_type, texture, usage,imageurl ,price,stock_quantity , category} = req.body;
+        const { product_name, brand, size, key_ingredients,description, skin_type, texture, usage,imageurl ,price,stock_quantity ,category} = req.body;
 
         // Check if all necessary fields are provided
         if (!product_name || !brand || !size || !key_ingredients || !skin_type || !texture || !usage) {
             return next(new AppError(`All product details are required`, 400));
         }
+
+        // Fetch the category ID correctly
+        const { data: categoryData, error: categoryError } = await database
+            .from("categories")
+            .select("id")
+            .eq("name", category);
+
+        console.log(categoryData);
+
+        if (categoryError) return next(new AppError(`Error fetching category: ${categoryError.message}`, 500));
+        if (!categoryData || categoryData.length === 0) return next(new AppError(`Category not found`, 404)); // Prevents undefined error
+
+        const categoryId = categoryData[0].id;  // Safely extract the UUID
 
         // Insert the product into the database
         const { data, error } = await database.from('products').insert([{
@@ -105,12 +134,14 @@ export const createProduct = async (req: any, res: Response, next: NextFunction)
             skin_type,
             imageurl,
             category,
+            category_id: categoryId,  // Use extracted UUID
             price,
             stock_quantity,
             texture,
             usage,
-            Description:description
+            Description: description
         }]).select();
+
 
         if (error) {
             return next(new AppError(`Error creating product: ${error.message}`, 500));
@@ -121,6 +152,7 @@ export const createProduct = async (req: any, res: Response, next: NextFunction)
             data: data,
         });
     } catch (err) {
+        console.log(err)
         return next(new AppError(`Internal server error`, 500));
     }
 };
