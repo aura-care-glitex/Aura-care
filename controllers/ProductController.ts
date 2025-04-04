@@ -187,7 +187,7 @@ export const getSingleProduct = async function (req:Request, res:Response, next:
 
         res.status(200).json({
             status:"success",
-            data:data
+            product:data
         })
     }catch (err) {
         return next(new AppError(`Internal server error`, 500));
