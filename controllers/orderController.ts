@@ -4,6 +4,7 @@ import {database} from "../middlewares/database";
 import { decodedToken } from "../middlewares/authorization";
 import redis from "../middlewares/redisConfig";
 import type { Order, User, OrderedItem } from "./../utils/types";
+import { generateOrderFingerprint } from "../utils/orderFingerprint";
 
 
 export const checkout = async (req: any, res: Response, next: NextFunction) => {
@@ -24,6 +25,20 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
         if (cartError) return next(new AppError(`Error fetching cart: ${cartError.message}`, 500));
         if (!cartItems.length) return next(new AppError("Cart is empty", 400));
 
+        // 🔹 Generate Order Fingerprint
+        const deliveryDetails = { deliveryType, stageId, storeAddress, county, deliveryLocation };
+        const orderFingerprint = generateOrderFingerprint(userId, cartItems, deliveryDetails);
+        const fingerprintKey = `order_fingerprint:${orderFingerprint}`;
+
+        const alreadyExists = await redis.get(fingerprintKey);
+        if (alreadyExists) {
+             res.status(409).json({
+                status: "fail",
+                message: "An identical order has already been placed recently. Please wait before trying again."
+            });
+            return
+        }
+
         // 🔹 Get Product Prices
         const productIds = cartItems.map(item => item.product_id);
         const { data: products, error: productError } = await database
@@ -43,7 +58,6 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
             return { product_id: item.product_id, quantity: item.quantity, unit_price: unitPrice };
         });
 
-        // 🔹 Calculate total items bought
         const numberOfItemsBought = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
         let deliveryFee = 0;
@@ -64,57 +78,57 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
             stageName = stage.name;
         }
 
-        // 🔹 Handle Outside Nairobi Delivery
         if (deliveryType === "Outside Nairobi" && !county) {
             return next(new AppError("County is required for 'Outside Nairobi' deliveries", 400));
         }
 
-        // 🔹 Handle Express Delivery
         if (deliveryType === "Express Delivery" && !storeAddress) {
             return next(new AppError("Store address is required for 'Express Delivery'", 400));
         }
 
-        totalPrice += deliveryFee; // Add delivery fee to total price
+        totalPrice += deliveryFee;
 
         const { data: orderData, error: orderError } = await database
-        .from("orders")
-        .insert([{
-            user_id: userId,
-            total_price: totalPrice,
-            number_of_items_bought: numberOfItemsBought,
-            delivery_type: deliveryType,
-            delivery_stage_id: deliveryType === "PSV" ? stageId : null,
-            delivery_location: deliveryType === "PSV" ? stageName : deliveryLocation,
-            store_address: deliveryType === "Express Delivery" ? storeAddress : null,
-            county: deliveryType === "Outside Nairobi" ? county : null,
-            delivery_fee: deliveryFee,
-            order_status: "pending"
-        }])
-        .select("id")
-        .single();
-        
+            .from("orders")
+            .insert([{
+                user_id: userId,
+                total_price: totalPrice,
+                number_of_items_bought: numberOfItemsBought,
+                delivery_type: deliveryType,
+                delivery_stage_id: deliveryType === "PSV" ? stageId : null,
+                delivery_location: deliveryType === "PSV" ? stageName : deliveryLocation,
+                store_address: deliveryType === "Express Delivery" ? storeAddress : null,
+                county: deliveryType === "Outside Nairobi" ? county : null,
+                delivery_fee: deliveryFee,
+                order_status: "pending"
+            }])
+            .select("id")
+            .single();
+
         if (orderError || !orderData || !orderData.id) {
             return next(new AppError("Failed to create order", 500));
         }
-        
+
         const orderId = orderData.id;
-        
-        // 🔹 Insert Products into `ordered_items`
+
         const orderedItemsInserts = orderItems.map(item => ({
-            order_id: orderId,  // Link to the new order
+            order_id: orderId,
             product_id: item.product_id,
             quantity: item.quantity,
             unit_price: item.unit_price
         }));
-        
+
         const { error: orderedItemsError } = await database
             .from("order_items")
             .insert(orderedItemsInserts);
-        
+
         if (orderedItemsError) {
+            await redis.del(fingerprintKey); // delete hash to allow retry
             return next(new AppError(`Error inserting ordered items: ${orderedItemsError.message}`, 500));
         }
-        
+
+        // ✅ Store the fingerprint to prevent future duplicates
+        await redis.set(fingerprintKey, "true", "EX", 3600); // valid for 1 hour
 
         res.status(201).json({
             status: "success",
