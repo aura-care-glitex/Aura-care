@@ -43,13 +43,23 @@ export const paymentWorker = new Worker('payments', async function(job:Job){
 
         return response.data;
 
-     } catch (error:any) {
+     } catch (error: any) {
+    // Log the actual error response from Paystack
+    if (error.response) {
+        console.error('💥 Paystack API Error:', {
+            status: error.response.status,
+            data: error.response.data,
+        });
+    } else {
+        console.error('💥 Error:', error.message);
+    }
 
-        // remove idempotency key on failure to allow retry
-        await redis.del(idempotencyKey)
+    // remove idempotency key on failure to allow retry
+    await redis.del(idempotencyKey);
 
-        throw error;
-     }
+    throw error;
+}
+
 }, { 
     connection: redisConnection, 
     removeOnComplete : { count: 1000 },
