@@ -52,9 +52,14 @@ export const initializePayment = async function(req: any, res: Response, next: N
         });
 
     } catch (err: any) {
-        console.log(err.message);
-        return next(new AppError(`${err.response?.data || 'Payment processing error'}`, 500));
+    console.error("💥 Error initializing payment:", err);
+
+    if (err?.stack) console.error("Stack trace:", err.stack);
+    if (err?.response) console.error("Response data:", err.response.data);
+    
+    return next(new AppError(`Payment processing error`, 500));
     }
+
 };
 
 // verify transactions
