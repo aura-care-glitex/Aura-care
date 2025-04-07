@@ -24,7 +24,7 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
             .eq("user_id", userId);
 
         if (cartError) return next(new AppError(`Error fetching cart: ${cartError.message}`, 500));
-        if (!cartItems.length) return next(new AppError("Cart is empty", 400));
+        if (!cartItems.length) return next(new AppError("No checked cart item found", 400));
 
         // 🔹 Generate Order Fingerprint
         const deliveryDetails = { deliveryType, stageId, storeAddress, county, deliveryLocation };

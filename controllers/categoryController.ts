@@ -75,37 +75,43 @@ export const getAllCategories = async function(req: Request, res: Response, next
     }
 };
 
-export const getSingleCategory = async function(req:Request, res:Response, next:NextFunction){
+export const getSingleCategory = async function(req: Request, res: Response, next: NextFunction) {
     try {
-        const { id } = req.params;
-
-        const key = `Single-category`;
-
-        const cachedCategory = await redis.get(key);
-        if(cachedCategory){
-            res.status(200).json({
-                status:"success",
-                data: JSON.parse(cachedCategory)
-            });
-            return;
-        }
-        const { data, error } = await database
-            .from("categories")
-            .select("*, products(*)")
-            .eq("id", id)
-            .single();
-
-        if(error){
-            return next(new AppError(`Error getting categories`, 401))
-        }
-
-        await redis.setex(key, 60, JSON.stringify(data));
-
-        res.status(200).json({ status: "success", data:data });
+      const { id } = req.params;
+  
+      const key = `Single-category-${id}`;
+  
+      const cachedCategory = await redis.get(key);
+      if (cachedCategory) {
+         res.status(200).json({
+          status: "success",
+          data: JSON.parse(cachedCategory)
+        });
+        return
+      }
+  
+      const { data, error } = await database
+        .from("categories")
+        .select("*, products(*)")
+        .eq("id", id)
+        .single();
+  
+      if (error) {
+        return next(new AppError(`Error getting categories`, 401));
+      }
+  
+      await redis.setex(key, 60, JSON.stringify(data));
+  
+      res.status(200).json({
+        status: "success",
+        data : data
+      });
+      
     } catch (error) {
-        return next(new AppError(`Internal server error`, 500))
+      console.log(error);
+      return next(new AppError("Internal server error", 500));
     }
-}
+  }
 
 export const updateCategory = async function(req:Request, res:Response, next:NextFunction){
     try {
