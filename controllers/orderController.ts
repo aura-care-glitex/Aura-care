@@ -20,6 +20,7 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
         const { data: cartItems, error: cartError } = await database
             .from("cart")
             .select("product_id, quantity")
+            .eq("selected_for_checkout", true)
             .eq("user_id", userId);
 
         if (cartError) return next(new AppError(`Error fetching cart: ${cartError.message}`, 500));

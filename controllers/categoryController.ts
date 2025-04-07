@@ -101,7 +101,7 @@ export const getSingleCategory = async function(req:Request, res:Response, next:
 
         await redis.setex(key, 60, JSON.stringify(data));
 
-        res.status(200).json({ status: "success", data });
+        res.status(200).json({ status: "success", data:data });
     } catch (error) {
         return next(new AppError(`Internal server error`, 500))
     }

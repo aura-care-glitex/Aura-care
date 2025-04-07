@@ -3,6 +3,7 @@ import AppError from "../utils/AppError";
 import { database } from "../middlewares/database";
 import { decodedToken } from "../middlewares/authorization";
 import redis from "../middlewares/redisConfig";
+import { AnyARecord } from "node:dns";
 
 export const getAllCart = async function (req: any, res: Response, next: NextFunction) {
     try {
@@ -236,3 +237,24 @@ export const deleteCartItem = async function (req: any, res: Response, next: Nex
         return next(new AppError("Internal server error", 500));
     }
 };
+
+// select and unselect an item
+export const selectUnselectItem = async function(req:any, res:Response, next:NextFunction){
+    try {
+        const userId = await decodedToken(req.token);
+
+        const { productId, selected_for_checkout } = req.body;
+
+        const { data, error } = await database.from('cart').update({selected_for_checkout}).eq("user_id", userId).eq("product_id", productId)
+
+        if(error) return next(new AppError(`Failed to update item cart: ${error.message}`, 500));
+
+        res.status(200).json({
+            status:"success",
+            message:"Cart item updated successfully"
+        })
+    } catch (error) {
+        console.log(error)
+        return next(new AppError(`Internal server error`, 500))
+    }
+}

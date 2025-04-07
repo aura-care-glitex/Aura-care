@@ -211,7 +211,7 @@ export const saveTransaction = async function(req: Request, res: Response, next:
         if (!cartItems.length) return next(new AppError("Cart is empty", 400));
 
         // 🔹 Clear User’s Cart
-        await database.from("cart").delete().eq("user_id", userId);
+        await database.from("cart").delete().eq("selected_for_checkout", true).eq("user_id", userId);
 
         res.status(200).json({
             status: "success",
