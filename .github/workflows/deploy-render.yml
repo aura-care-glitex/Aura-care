@@ -78,16 +78,16 @@ jobs:
 
       - name: Install Dependencies
         run: pnpm install
-        
+
       - name: Build Project
         run: pnpm build
 
       # Save the built files as an artifact
       - name: Upload Built Project as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: built-project
-          path: dist/
+          path: dist
 
   # 5. Deploy to Render
   deploy:
@@ -99,7 +99,7 @@ jobs:
 
       # Download the artifact from the previous job
       - name: Download Built Project Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: built-project
 
