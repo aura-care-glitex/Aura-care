@@ -1,0 +1,89 @@
+name: Deploy Backend to Docker Hub
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  get-code:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.extract-sha.outputs.sha }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract Commit SHA
+        id: extract-sha
+        run: echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+  install-dependencies:
+    needs: get-code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: pnpm install
+
+  run-tests:
+    needs: install-dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: pnpm install
+
+      - run: pnpm test
+
+  build-and-push:
+    needs: run-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/auracare-backend:${{ needs.get-code.outputs.sha }} .
+
+      - name: Push Docker image
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/auracare-backend:${{ needs.get-code.outputs.sha }}
+
+  # deploy-to-vps:
+  #   needs: build-and-push
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Deploy via SSH
+  #       uses: appleboy/ssh-action@v1.0.3
+  #       with:
+  #         host: ${{ secrets.VPS_HOST }}
+  #           username: ${{ secrets.VPS_USERNAME }}
+  #           key: ${{ secrets.VPS_SSH_KEY }}
+  #           script: |
+  #                 cd /home/${{ secrets.VPS_USERNAME }}/backend-app
+  #                 docker pull ${{ secrets.DOCKER_USERNAME }}/backend-app:latest
+  #                 docker-compose down
+  #                 docker-compose up -d
+  #                 docker image prune -f

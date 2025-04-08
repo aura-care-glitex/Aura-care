@@ -1,0 +1,103 @@
+name: Deploy to Render.com
+
+on:
+  push:
+    branches:
+      - auth
+  workflow_dispatch:
+
+jobs:
+  # 1. Get Code from repository
+  get-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+  # 2. Install Dependencies
+  install-dependencies:
+    needs: get-code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+  # 3. Run Tests
+  test:
+    needs: install-dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Run Tests
+        run: pnpm test
+
+  # 4. Build TypeScript Project
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Build Project
+        run: pnpm build
+
+      # Save the built files as an artifact
+      - name: Upload Built Project as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-project
+          path: dist/
+
+  # 5. Deploy to Render
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Download the artifact from the previous job
+      - name: Download Built Project Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: built-project
+
+      # Trigger Render Deploy
+      - name: Trigger Render Deploy
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
