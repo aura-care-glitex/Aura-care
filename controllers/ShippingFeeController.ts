@@ -18,9 +18,21 @@ export const getAllShippingFees = async (req: Request, res: Response, next: Next
 
         if (error) return next(new AppError("Error fetching shipping fees", 500));
 
+        // Fetch total count of categories
+        const { count, error: countError } = await database
+            .from("psv_stages")
+            .select("*", { count: "exact", head: true });
+    
+        if (countError) {
+            return next(new AppError(`Error getting total products: ${countError.message}`, 500));
+        }
+
         res.status(200).json({ 
             status: "success", 
-            data :data
+            data :data,
+            page,
+            limit,
+            totalCount: count
         });
     } catch (err) {
         return next(new AppError("Error fetching shipping fees", 500));
