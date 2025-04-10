@@ -14,7 +14,7 @@ export const getAllReviews=async function(req: Request, res: Response, next: Nex
         const offset = (page - 1) * limit;
 
         // Constructing filtering conditions
-        let query = database.from("reviews").select("*").range(offset, offset + limit - 1);
+        let query = database.from("product_reviews").select("*").range(offset, offset + limit - 1);
 
         if (rating) {
             query = query.eq("rating", Number(rating));
@@ -37,6 +37,14 @@ export const getAllReviews=async function(req: Request, res: Response, next: Nex
             return
         }
 
+        const { count, error: countError } = await database
+            .from("reviews")
+            .select("*", { count: "exact", head: true });
+
+        if (countError) {
+            return next(new AppError(`Error getting total reviews: ${countError.message}`, 500));
+        }
+
         // Fetch from database
         const { data: reviews, error } = await query;
 
@@ -53,8 +61,9 @@ export const getAllReviews=async function(req: Request, res: Response, next: Nex
         res.status(200).json({
             status: "success",
             data: reviews,
-            page,
-            limit
+            page: Number(page),
+            limit: Number(limit),
+            totalCount: count
         });
 
     } catch (err) {
@@ -100,40 +109,95 @@ export const getSingleReview = async function (req:Request, res:Response, next:N
 }
 
 export const createReview = async function (req: any, res: Response, next: NextFunction) {
-    try {
-        const { review, product_id } = req.body;
+  try {
+    const { product_id, rating, review } = req.body;
 
-        if (!review || !product_id) {
-            return next(new AppError("Review and Product ID are required", 400));
-        }
+    const user_id = await decodedToken(req.token); // Assuming you already have this function
 
-        const userId = await decodedToken(req.token)
+    // Step 1: Check if user has any order containing this product
+    const { data: orderItems, error: orderItemsError } = await database
+      .from('order_items')
+      .select('id, order_id')
+      .eq('product_id', product_id);
 
-        // Fetch user from database
-        const { data: user, error: userError } = await database.from("users").select("*").eq("id", userId).single();
-
-        if (userError || !user) {
-            return next(new AppError("User not found", 404));
-        }
-
-        // Insert review into the database
-        const { data: createdReview, error: insertError } = await database.from("reviews").insert([{ name: user.username, date: new Date().toISOString(), review, user_id: userId, product_id,}]).select("*");
-
-        if (insertError) {
-            return next(new AppError(`Error creating review`, 500));
-        }
-
-        res.status(201).json({
-            status: "success",
-            message: "Review created successfully",
-            review: createdReview
-        });
-
-    } catch (err) {
-        console.error("Error creating review:", err);
-        return next(new AppError("Internal server error", 500));
+    if (orderItemsError) throw orderItemsError;
+    if (!orderItems || orderItems.length === 0) {
+       res.status(400).json({
+        status: 'Fail',
+        message: 'This product has not been purchased.',
+      });
+      return
     }
+
+    // Step 2: Check if any of those order_ids belong to this user
+    const orderIds = orderItems.map((item) => item.order_id);
+
+    const { data: userOrders, error: userOrdersError } = await database
+      .from('orders')
+      .select('id')
+      .in('id', orderIds)
+      .eq('user_id', user_id);
+
+    if (userOrdersError) throw userOrdersError;
+    if (!userOrders || userOrders.length === 0) {
+       res.status(400).json({
+        status: 'Fail',
+        message: 'This product has not yet been purchased by you.',
+      });
+      return
+    }
+
+    // Step 3: Get the matching order_item_id
+    const orderItemId = orderItems.find((item) => userOrders.find((order) => order.id === item.order_id))?.id;
+
+    if (!orderItemId) {
+       res.status(400).json({
+        status: 'Fail',
+        message: 'No matching order item found.',
+      });
+      return
+    }
+
+    // Step 4: Insert Review
+    const { error: reviewError } = await database.from('product_reviews').insert({
+      user_id,
+      product_id,
+      order_item_id: orderItemId,
+      rating,
+      review,
+    });
+
+    if (reviewError) throw reviewError;
+
+    // Step 5: Update average rating for the product
+    const { data: allReviews, error: allReviewsError } = await database
+      .from('product_reviews')
+      .select('rating')
+      .eq('product_id', product_id);
+
+    if (allReviewsError) throw allReviewsError;
+
+    const totalRating = allReviews.reduce((sum, item) => sum + item.rating, 0);
+    const avgRating = totalRating / allReviews.length;
+
+    await database
+      .from('products')
+      .update({ average_rating: avgRating })
+      .eq('id', product_id);
+
+    res.status(201).json({
+      status: 'Success',
+      message: 'Review added successfully!',
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      status: 'Fail',
+      message: 'Error adding review.',
+    });
+  }
 };
+  
 
 export const updateReview = async function (req:any, res:Response, next:NextFunction){
     try {
@@ -147,7 +211,7 @@ export const updateReview = async function (req:any, res:Response, next:NextFunc
         const userId = await decodedToken(req.token)
 
         // get the review from the database
-        const { data: review, error: reviewError } = await database.from("reviews").select("*").eq("id", reviewId);
+        const { data: review, error: reviewError } = await database.from("product_reviews").select("*").eq("id", reviewId);
 
         if (reviewError) {
             return next(new AppError(`Error getting product: ${reviewError.message}`, 500));
@@ -175,7 +239,7 @@ export const updateReview = async function (req:any, res:Response, next:NextFunc
         }
 
         // update the review
-        const { data:update, error } = await database.from("reviews").update(updateBody).eq("id", reviewId).select();
+        const { data:update, error } = await database.from("product_reviews").update(updateBody).eq("id", reviewId).select();
 
         if(error){
             return next(new AppError(`Error updating`, 401))
@@ -202,7 +266,7 @@ export const deleteReview = async function (req:any, res:Response, next:NextFunc
         const userId = await decodedToken(req.token)
 
         // get the review from the database
-        const { data: review, error: reviewError } = await database.from("reviews").select("*").eq("id", reviewId);
+        const { data: review, error: reviewError } = await database.from("product_reviews").select("*").eq("id", reviewId);
 
         if (reviewError) {
             return next(new AppError(`Error getting product: ${reviewError.message}`, 500));
@@ -225,7 +289,7 @@ export const deleteReview = async function (req:any, res:Response, next:NextFunc
         }
 
         // delete the review
-        const { data:update, error } = await database.from("reviews").delete().eq("id", reviewId);
+        const { data:update, error } = await database.from("product_reviews").delete().eq("id", reviewId);
 
         if(error){
             return next(new AppError(`Error updating`, 401))
@@ -234,7 +298,7 @@ export const deleteReview = async function (req:any, res:Response, next:NextFunc
         res.status(200).json({
             status:"success",
             message:"review updated successfully",
-            data: update,
+            data: null,
         })
     }catch(err){
         return next(new AppError(`Internal server error`, 500));

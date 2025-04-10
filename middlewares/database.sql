@@ -85,12 +85,12 @@ CREATE TABLE product_reviews (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     product_id UUID REFERENCES products(id) ON DELETE CASCADE,
-    order_item_id UUID REFERENCES order_items(id) ON DELETE CASCADE, -- Ensures review is linked to a purchased product
-    rating INT CHECK (rating BETWEEN 1 AND 5) NOT NULL, -- Rating from 1 to 5
-    review TEXT NOT NULL, -- User's review text
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE (user_id, product_id) -- Ensures a user can review a product only once
+    order_item_id UUID REFERENCES order_items(id) ON DELETE CASCADE,
+    rating INT CHECK (rating >= 1 AND rating <= 5), -- Rating from 1 to 5
+    review TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
 );
+
 
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
