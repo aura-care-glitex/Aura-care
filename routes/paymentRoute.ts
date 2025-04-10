@@ -16,7 +16,7 @@ router.post("/paystack/pay", protect, authHeaders, initializePayment);
 router.get("/paystack/pay", protect, restrictTo("admin"), listTransactions);
 
 // 🔹 Verify Payment (Admin Only)
-router.get("/paystack/verify/:referenceId", protect, restrictTo("admin"), verifyTransactions);
+router.get("/paystack/verify/:referenceId", protect, authHeaders, verifyTransactions);
 
 // 🔹 Get Single Transaction (Admin Only)
 router.get("/paystack/:transactionId", protect, restrictTo("admin"), getSingleTransaction);
