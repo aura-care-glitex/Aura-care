@@ -86,7 +86,8 @@ export const checkout = async (req: any, res: Response, next: NextFunction) => {
             storeAddress,
             county,
             deliveryLocation,
-            deliveryFee
+            deliveryFee,
+            stageName
         };
 
         // 🔹 Final Response
@@ -213,6 +214,7 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
         const { orderId } = req.params;
         const { status } = req.body;
 
+        console.log(orderId)
         // Validate status
         const validStatuses = ["Pending", "Dispatched", "Delivered", "Cancelled"];
         if (!validStatuses.includes(status)) {
@@ -225,6 +227,7 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
             .select("id")
             .eq("id", orderId)
             .single();
+console.log(existingOrder)
 
         if (fetchError || !existingOrder) {
             return next(new AppError("Order not found", 404));

@@ -14,6 +14,6 @@ const router = express.Router();
 router.post("/", protect, authHeaders, checkout);
 router.get("/", getAllOrders);
 router.get("/:orderId", singleOrderModule); 
-router.patch("/:id", protect, restrictTo("admin"), updateOrderStatus); 
+router.patch("/:orderId", protect, restrictTo("admin"), updateOrderStatus); 
 
 export default router;
