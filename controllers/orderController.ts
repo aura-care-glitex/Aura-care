@@ -189,7 +189,8 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             location: order.delivery_location ?? "N/A",
             delivery_options: order.delivery_type ?? "N/A",
             order_date: order.created_at,
-            order_cost: order.total_price ?? 0
+            order_cost: order.total_price ?? 0,
+            tracking_status: order.tracking_status
         }));
 
         // ✅ Cache response for 60 seconds
