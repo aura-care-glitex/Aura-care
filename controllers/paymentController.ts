@@ -134,7 +134,7 @@ export const verifyTransactions = async function (req: any, res: Response, next:
             const orderId = orderData.id;
 
             // Prepare order items insertion data
-            const orderedItemsInserts = orderItems.map((item: { product_id: any; quantity: any; unit_price: any }) => ({
+            const orderedItemsInserts = orderItems.map((item: { product_id: string; quantity: number; unit_price: number }) => ({
                 order_id: orderId,
                 product_id: item.product_id,
                 quantity: item.quantity,
