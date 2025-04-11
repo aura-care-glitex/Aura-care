@@ -283,6 +283,7 @@ export const singleOrderModule = async (req: Request, res: Response, next: NextF
                     delivery_fee,
                     delivery_type,
                     delivery_location,
+                    tracking_status,
                     created_at,
                     users:user_id(id, username, phonenumber, email)
                 ),
@@ -315,6 +316,7 @@ export const singleOrderModule = async (req: Request, res: Response, next: NextF
                 : "N/A",
             total_price: ((orderItems[0].orders as any).total_price || 0).toFixed(2),
             shipping_fee: (orderItems[0].orders as any).delivery_fee || 0,
+            tracking_status: (orderItems[0].orders as any).tracking_status || "N/A",
             grand_total: (
                 ((orderItems[0].orders as any).total_price || 0) +
                 ((orderItems[0].orders as any).delivery_fee || 0)

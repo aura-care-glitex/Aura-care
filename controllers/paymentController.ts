@@ -13,8 +13,33 @@ dotenv.config();
 
 export const initializePayment = async function(req: any, res: Response, next: NextFunction) {
     try {
-        const { amount } = req.body;
+        // Get ALL order data upfront
+        const { 
+            amount,
+            orderItems,
+            deliveryType,
+            stageId,
+            stageName,
+            storeAddress,
+            county,
+            deliveryFee
+        } = req.body;
+
         const userId = await decodedToken(req.token);
+
+        // Store complete order data in Redis first
+        const orderDataKey = `order_data:${userId}:${Date.now()}`;
+
+        const orderData = {
+            orderItems,
+            deliveryType,
+            totalPrice: amount,
+            deliveryFee,
+            ...(stageId && { stageId }),
+            ...(stageName && { stageName }),
+            ...(storeAddress && { storeAddress }),
+            ...(county && { county })
+          };
 
         // Fetch the user's email based on the userId
         const { data: user, error: userError } = await database
@@ -51,10 +76,12 @@ export const initializePayment = async function(req: any, res: Response, next: N
             throw new Error('Authorization URL not received from Paystack');
         }
 
+        await redis.setex(orderDataKey,3600, JSON.stringify(orderData)); // Store for 1 hour        
         // Respond with the payment URL
         res.status(200).json({
             status: 'success',
             message: 'Payment initialized successfully',
+            orderDataKey: orderDataKey,
             referenceId: result.data.reference,
             url: result.data.authorization_url
         });
@@ -69,72 +96,68 @@ export const initializePayment = async function(req: any, res: Response, next: N
     }
 };
 
-
-// verify transactions
-const generateIdempotencyKey = (userId: string, orderItems: any[], totalPrice: number): string => {
-    const data = `${userId}-${JSON.stringify(orderItems)}-${totalPrice}`;
-    
-    return crypto.createHash('sha256').update(data).digest('hex');
-};
-
 export const verifyTransactions = async function (req: any, res: Response, next: NextFunction) {
     try {
         const { referenceId } = req.params;
+        console.log(referenceId)
 
-        const {
-            orderItems,
-            deliveryType,
-            totalPrice,
-            stageId,
-            stageName,
-            storeAddress,
-            county,
-            deliveryFee
-        } = req.body;
-
-        const userId: any = await decodedToken(req.token);
-
-        // Generate the idempotency key using crypto
-        const idempotencyKey = generateIdempotencyKey(userId, orderItems, totalPrice);
-
-        // Check Redis for the idempotency key
-        const existingOrder = await redis.get(idempotencyKey);
-
-        if (existingOrder) {
-            return next(new AppError("Duplicate order detected. Please wait for 3 minutes before creating the same order.", 400));
+        if (!referenceId) {
+          return next(new AppError('Missing reference ID', 400));
+        }
+    
+        const userId = await decodedToken(req.token);
+        if (!userId) {
+          return next(new AppError('Authentication required', 401));
         }
 
         // Polling the payment status
         const paymentStatus = await pollPaymentStatus(referenceId);
+        console.log(paymentStatus)
 
-        if (paymentStatus === "success") {
-            const { data: orderData, error: orderError } = await database
+        if (paymentStatus !== 'success') {
+            return next(new AppError('Payment verification failed', 400));
+        }
+
+        const orderDataKey = req.query.orderDataKey as string;
+        console.log(orderDataKey)
+
+        if(!orderDataKey) return next( new AppError(`Missing order data key`, 400));
+
+        const rawData = await redis.get(orderDataKey); // Get using the key string
+        if (!rawData) {
+          return next(new AppError('Order data expired or missing', 400));
+        }
+        
+        const parsedData = JSON.parse(rawData); // Parse the stored JSON value
+
+        const { data: orderData, error: Error } = await database
                 .from("orders")
                 .insert([{
                     user_id: userId,
-                    total_price: totalPrice,
-                    number_of_items_bought: orderItems.length,
-                    delivery_type: deliveryType,
-                    delivery_stage_id: deliveryType === "PSV" ? stageId : null,
-                    delivery_location: deliveryType === "PSV" ? stageName : null,
-                    store_address: deliveryType === "Express Delivery" ? storeAddress : null,
-                    county: deliveryType === "Outside Nairobi" ? county : null,
-                    delivery_fee: deliveryFee,
+                    total_price: parsedData.totalPrice,
+                    number_of_items_bought: parsedData.orderItems.length,
+                    delivery_type: parsedData.deliveryType,
+                    delivery_stage_id: parsedData.deliveryType === "PSV" ? parsedData.stageId : null,
+                    delivery_location: parsedData.deliveryType === "PSV" ? parsedData.stageName : null,
+                    store_address: parsedData.deliveryType === "Express Delivery" ? parsedData.storeAddress : null,
+                    county: parsedData.deliveryType === "Outside Nairobi" ? parsedData.county : null,
+                    delivery_fee: parsedData.deliveryFee,
                     order_status: "pending",  // Pending status until payment is successful
                 }])
                 .select("id")
                 .single();
 
+            console.log(orderData)
             // Handle order creation errors
-            if (orderError || !orderData || !orderData.id) {
-                console.error('Order creation failed:', orderError); // Log the specific error
-                return next(new AppError(`Failed to create pending order: ${orderError ? orderError.message : 'Unknown error'}`, 500));
+            if (Error || !orderData || !orderData.id) {
+                console.error('Order creation failed:', Error); // Log the specific error
+                return next(new AppError(`Failed to create pending order: ${Error ? Error.message : 'Unknown error'}`, 500));
             }
 
             const orderId = orderData.id;
 
             // Prepare order items insertion data
-            const orderedItemsInserts = orderItems.map((item: { product_id: string; quantity: number; unit_price: number }) => ({
+            const orderedItemsInserts =parsedData.orderItems.map((item: { product_id: string; quantity: number; unit_price: number }) => ({
                 order_id: orderId,
                 product_id: item.product_id,
                 quantity: item.quantity,
@@ -147,21 +170,43 @@ export const verifyTransactions = async function (req: any, res: Response, next:
                 .insert(orderedItemsInserts);
 
             if (orderedItemsError) {
-                console.error('Error inserting order items:', orderedItemsError); // Log the error
-                return next(new AppError(`Error inserting ordered items: ${orderedItemsError.message}`, 500));
+                await database.from('orders').delete().eq('id', orderId);
+                return next(new AppError('Failed to save order items', 500));
             }
 
-            await redis.set(idempotencyKey, orderId, 'EX', 300);
+            // 🔹 Update Order Status
+            const { data: order, error: orderError } = await database
+                .from("orders")
+                .select("id")
+                .eq("user_id", userId)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .single();
+
+            if (orderError || !order) throw new AppError("Order not found", 404);
+
+            const { error: updateError } = await database
+                .from("orders")
+                .update({ 
+                    order_status: "success",
+                    tracking_status: "Pending"
+                })
+                .eq("id", orderId);
+
+            if (updateError) throw new AppError("Order update failed", 500);
+
+            // 🔹 Clear cart
+            await database
+                .from("cart")
+                .delete()
+                .eq("selected_for_checkout", true)
+                .eq("user_id", userId);
 
             // Respond with success message
             res.status(200).json({
                 status: "success",
                 message: "Order placed successfully"
             });
-        } else {
-            // Handle payment failure
-            return next(new AppError("Payment verification failed, payment status is not success.", 400));
-        }
 
     } catch (error: any) {
         // Log any unexpected errors for debugging
@@ -257,38 +302,11 @@ export const saveTransaction = async function(req: Request, res: Response, next:
             const user = await getUser();
             await saveTransactionRecord(user.id, event.data.status);
 
-            // 🔹 Update Order Status
-            const { data: order, error: orderError } = await database
-                .from("orders")
-                .select("id")
-                .eq("user_id", user.id)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .single();
 
-            if (orderError || !order) throw new AppError("Order not found", 404);
-
-            const { error: updateError } = await database
-                .from("orders")
-                .update({ 
-                    order_status: "success",
-                    tracking_status: "Pending"
-                })
-                .eq("id", order.id);
-
-            if (updateError) throw new AppError("Order update failed", 500);
-
-            // 🔹 Clear cart
-            await database
-                .from("cart")
-                .delete()
-                .eq("selected_for_checkout", true)
-                .eq("user_id", user.id);
 
             res.status(200).json({
                 status: "success",
                 message: "Payment processed successfully",
-                order_id: order.id
             });
 
         } else {
