@@ -23,6 +23,14 @@ export const getAllReviews=async function(req: Request, res: Response, next: Nex
             query = query.ilike("comment", `%${search}%`);
         }
 
+        const { count, error: countError } = await database
+            .from("product_reviews")
+            .select("*", { count: "exact", head: true });
+
+        if (countError) {
+            return next(new AppError(`Error getting total reviews: ${countError.message}`, 500));
+        }
+
         const cacheKey = `reviews:page-${page}:limit-${limit}:rating-${rating || 'all'}:search-${search || 'none'}`;
 
         // Check Redis cache
@@ -32,17 +40,10 @@ export const getAllReviews=async function(req: Request, res: Response, next: Nex
                 status: "success",
                 reviews: JSON.parse(cachedReviews),
                 page,
-                limit
+                limit,
+                totalCount: count
             });
             return
-        }
-
-        const { count, error: countError } = await database
-            .from("reviews")
-            .select("*", { count: "exact", head: true });
-
-        if (countError) {
-            return next(new AppError(`Error getting total reviews: ${countError.message}`, 500));
         }
 
         // Fetch from database
@@ -60,7 +61,7 @@ export const getAllReviews=async function(req: Request, res: Response, next: Nex
 
         res.status(200).json({
             status: "success",
-            data: reviews,
+            reviews: reviews,
             page: Number(page),
             limit: Number(limit),
             totalCount: count
@@ -112,7 +113,7 @@ export const createReview = async function (req: any, res: Response, next: NextF
   try {
     const { product_id, rating, review } = req.body;
 
-    const user_id = await decodedToken(req.token); // Assuming you already have this function
+    const user_id = await decodedToken(req.token);
 
     // Step 1: Check if user has any order containing this product
     const { data: orderItems, error: orderItemsError } = await database
