@@ -14,7 +14,7 @@ export const getAllCart = async function (req: any, res: Response, next: NextFun
         if(cachedCartProduct){
             res.status(200).json({
                 status:"success",
-                cartproduct:JSON.parse(cachedCartProduct)
+                data:JSON.parse(cachedCartProduct)
             })
             return
         }
