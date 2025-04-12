@@ -92,7 +92,7 @@ export const getSingleReview = async function (req:Request, res:Response, next:N
             return next(new AppError(`review id is needed`, 400))
         }
 
-        let { data:review, error } = await database.from("reviews").select("*").eq('id', reviewId);
+        let { data:review, error } = await database.from("product_reviews").select("*").eq('id', reviewId);
 
         if(error){
             return next(new AppError(`Error getting a single review`, 402))
