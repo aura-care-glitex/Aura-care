@@ -14,7 +14,7 @@ export const getAllReviews=async function(req: Request, res: Response, next: Nex
         const offset = (page - 1) * limit;
 
         // Constructing filtering conditions
-        let query = database.from("product_reviews").select("*").range(offset, offset + limit - 1);
+        let query = database.from("product_reviews").select("*, users(username)").range(offset, offset + limit - 1);
 
         if (rating) {
             query = query.eq("rating", Number(rating));
@@ -92,7 +92,7 @@ export const getSingleReview = async function (req:Request, res:Response, next:N
             return next(new AppError(`review id is needed`, 400))
         }
 
-        let { data:review, error } = await database.from("product_reviews").select("*").eq('id', reviewId);
+        let { data:review, error } = await database.from("product_reviews").select("*, users(username)").eq('id', reviewId);
 
         if(error){
             return next(new AppError(`Error getting a single review`, 402))
