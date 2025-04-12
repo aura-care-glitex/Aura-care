@@ -6,7 +6,7 @@ dotenv.config();
 export const pollPaymentStatus = async (referenceId: string) => {
     let status = 'pending';
     const maxRetries = 10; // Increased retries
-    const initialDelay = 60000; // 60 seconds before first check
+    const initialDelay = 120000; // 2 minutes before first check
     let retries = 0;
 
     // Add initial delay to account for payment processing time

@@ -15,6 +15,8 @@ export interface OrderedItem {
 }
 
 export interface Order {
+  county: string;
+  store_address: string;
   tracking_status: any;
   order_items: any;
   delivery_fee: number;

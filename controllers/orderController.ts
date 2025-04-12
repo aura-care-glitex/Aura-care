@@ -128,6 +128,8 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
                 tracking_status,
                 delivery_type,
                 delivery_location,
+                store_address,
+                county,
                 users:user_id ( username, phonenumber ),
                 order_items ( quantity )
             `) as unknown as { data: Order[]; error: any };
@@ -189,6 +191,8 @@ export const getAllOrders = async function (req: Request, res: Response, next: N
             total_items_bought: (order.order_items ?? []).reduce((sum: number, item: { quantity: number }) => sum + (item.quantity ?? 0), 0),
             location: order.delivery_location ?? "N/A",
             delivery_options: order.delivery_type ?? "N/A",
+            store_address: order.store_address ?? "N/A",
+            county: order.county ?? "N/A",
             order_date: order.created_at,
             order_cost: order.total_price ?? 0,
             tracking_status: order.tracking_status
@@ -284,6 +288,8 @@ export const singleOrderModule = async (req: Request, res: Response, next: NextF
                     delivery_type,
                     delivery_location,
                     tracking_status,
+                    county,
+                    store_address,
                     created_at,
                     users:user_id(id, username, phonenumber, email)
                 ),
@@ -322,6 +328,8 @@ export const singleOrderModule = async (req: Request, res: Response, next: NextF
                 ((orderItems[0].orders as any).delivery_fee || 0)
             ).toFixed(2),
             delivery_type: (orderItems[0].orders as any).delivery_type || "N/A",
+            store_address: (orderItems[0].orders as any).store_address || "N/A",
+            county: (orderItems[0].orders as any).county || "N/A",
             delivery_location: (orderItems[0].orders as any).delivery_location || "N/A",
             ordered_items: orderItems.map((item: any) => ({
                 product_name: item.products?.product_name || "Unknown",
