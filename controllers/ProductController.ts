@@ -161,7 +161,7 @@ export const getSingleProduct = async function (req:Request, res:Response, next:
     try {
         const { productId } = req.params;
 
-        const key = "single-product";
+        const key = `single-product-${productId}`;
 
         const cachedProduct = await redis.get(key);
 
