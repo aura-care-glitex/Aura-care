@@ -158,6 +158,33 @@ export const updateProfile = async function (req: any, res: Response, next: Next
             return next(new AppError("No valid fields provided for update", 400));
         }
 
+        // Check if email is already in use by another user
+        if (filteredBody.email) {
+            const { data: existingEmail, error: emailCheckError } = await database
+                .from("users")
+                .select("id")
+                .eq("email", filteredBody.email)
+                .neq("id", userId);
+
+            if (emailCheckError) return next(new AppError("Error checking email uniqueness", 500));
+            if (existingEmail && existingEmail.length > 0) {
+                return next(new AppError("Email already in use", 400));
+            }
+        }
+
+        // Check if phonenumber is already in use by another user
+        if (filteredBody.phonenumber) {
+            const { data: existingPhone, error: phoneCheckError } = await database
+                .from("users")
+                .select("id")
+                .eq("phonenumber", filteredBody.phonenumber)
+                .neq("id", userId);
+
+            if (phoneCheckError) return next(new AppError("Error checking phone number uniqueness", 500));
+            if (existingPhone && existingPhone.length > 0) {
+                return next(new AppError("Phone number already in use", 400));
+            }
+        }
         // Update user profile
         const { error: updateError } = await database.from("users").update(filteredBody).eq("id", userId);
 

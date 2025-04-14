@@ -3,7 +3,6 @@ import AppError from "../utils/AppError";
 import { database } from "../middlewares/database";
 import { decodedToken } from "../middlewares/authorization";
 import redis from "../middlewares/redisConfig";
-import { AnyARecord } from "node:dns";
 
 export const getAllCart = async function (req: any, res: Response, next: NextFunction) {
     try {
@@ -28,7 +27,7 @@ export const getAllCart = async function (req: any, res: Response, next: NextFun
         // Get the products from the cart belonging to that user
         const { data: cartItems, error: cartError } = await database
             .from('cart')
-            .select("product_id, quantity")
+            .select("product_id, quantity, selected_for_checkout ")
             .eq("user_id", userId);
 
         if (cartError) {
@@ -60,7 +59,8 @@ export const getAllCart = async function (req: any, res: Response, next: NextFun
             const cartItem = cartItems.find(item => item.product_id === product.id);
             return {
                 ...product,
-                quantity: cartItem ? cartItem.quantity : 1 // Default to 1 if not found (shouldn't happen)
+                quantity: cartItem ? cartItem.quantity : 1, // Default to 1 if not found (shouldn't happen)
+                selected_for_checkout: cartItem?.selected_for_checkout
             };
         });
 
@@ -92,7 +92,7 @@ export const addToCart = async function (req: any, res: Response, next: NextFunc
         // Check if the product is already in the cart
         const { data: existingCartItem, error: fetchError } = await database
             .from('cart')
-            .select("id, quantity")
+            .select("id, quantity, selected_for_checkout")
             .eq("user_id", userId)
             .eq("product_id", productId)
             .single();
@@ -106,7 +106,7 @@ export const addToCart = async function (req: any, res: Response, next: NextFunc
             const newQuantity = existingCartItem.quantity + quantity;
             const { error: updateError } = await database
                 .from('cart')
-                .update({ quantity: newQuantity })
+                .update({ quantity: newQuantity, selected_for_checkout: true })
                 .eq("id", existingCartItem.id);
 
             if (updateError) {
@@ -116,7 +116,7 @@ export const addToCart = async function (req: any, res: Response, next: NextFunc
             // Insert a new cart item
             const { error: insertError } = await database
                 .from('cart')
-                .insert([{ user_id: userId, product_id: productId, quantity }]);
+                .insert([{ user_id: userId, product_id: productId, quantity, selected_for_checkout: true }]);
 
             if (insertError) {
                 return next(new AppError(`Error adding to cart: ${insertError.message}`, 500));
