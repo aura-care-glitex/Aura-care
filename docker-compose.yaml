@@ -143,7 +143,7 @@ services:
       start_period: 40s
     ports:
       - "6379:6379"
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes", "--replicaof", "no", "one"]
     volumes:
       - redis_data:/data
     networks:
